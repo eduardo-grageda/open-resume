@@ -1,0 +1,15 @@
+__pycache__/
+*.pyc
+*.pyo
+venv/
+.env
+node_modules/
+dist/
+data/config.json
+data/base_cv.json
+data/positions/
+data/exports/
+data/onboarding_sessions/
+mongo_data/
+*.pdf
+*.log

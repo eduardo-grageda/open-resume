@@ -683,12 +683,12 @@ vite>=5.0.0
 - [ ] Base CV CRUD routes.
 
 ### Phase 2: Frontend Foundation
-- [ ] Vite + React scaffold.
-- [ ] Router setup, layout shell, navigation.
-- [ ] `api.js` fetch wrapper.
-- [ ] SettingsPage (first-run configuration).
-- [ ] HomePage + CvEditorPage (MdEditor component).
-- [ ] PositionsPage + PositionPage (basic CRUD, no adaptation).
+- [x] Vite + React scaffold.
+- [x] Router setup, layout shell, navigation.
+- [x] `api.js` fetch wrapper.
+- [x] SettingsPage (first-run configuration).
+- [x] HomePage + CvEditorPage (MdEditor component).
+- [x] PositionsPage + PositionPage (basic CRUD, no adaptation).
 
 ### Phase 3: Onboarding
 - [ ] OnboardingService: session state, prompt templates, response parsing.

@@ -45,6 +45,16 @@ See `PLAN.md` for the full directory layout.
 - No auth — local-only tool. No telemetry, no external services beyond the configured AI/search providers.
 - License: MIT.
 
+## Memory Files
+
+After every meaningful change, update the relevant MEMORY.md file(s) to reflect the new state:
+
+- `MEMORY.md` (root) — overall project status, what phases are done, key decisions
+- `backend/MEMORY.md` — backend modules, routes, services, what's implemented vs pending
+- `frontend/MEMORY.md` — frontend pages, components, design system, what's implemented vs pending
+
+Keep these files concise but accurate. They serve as the source of truth for what exists and what remains.
+
 ## Commit Convention
 
 ```
@@ -69,7 +79,7 @@ Optional body explaining what and why. Wrap at 72 chars.
 See `PLAN.md` for full details. Current phase is tracked below:
 
 - [x] Phase 1: Backend Core
-- [ ] Phase 2: Frontend Foundation
+- [x] Phase 2: Frontend Foundation
 - [ ] Phase 3: Onboarding
 - [ ] Phase 4: CV Adaptation & Export
 - [ ] Phase 5: Job Search

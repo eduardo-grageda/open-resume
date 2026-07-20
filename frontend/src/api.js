@@ -38,6 +38,12 @@ export const api = {
     return fetch(`${BASE}/cv/ingest-pdf`, { method: 'POST', body: form }).then(r => r.json());
   },
 
+  // Onboarding
+  onboardStart: (body) => request('POST', '/cv/onboard/start', body),
+  onboardAnswer: (body) => request('POST', '/cv/onboard/answer', body),
+  onboardConfirm: (body) => request('POST', '/cv/onboard/confirm', body),
+  onboardProgress: (sessionId) => request('GET', `/cv/onboard/progress/${sessionId}`),
+
   // Positions
   listPositions: (params = {}) => {
     const qs = new URLSearchParams(params).toString();

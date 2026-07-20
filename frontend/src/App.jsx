@@ -4,6 +4,7 @@ import Layout from './components/Layout';
 import HomePage from './pages/HomePage';
 import SettingsPage from './pages/SettingsPage';
 import CvEditorPage from './pages/CvEditorPage';
+import OnboardingPage from './pages/OnboardingPage';
 import PositionsPage from './pages/PositionsPage';
 import PositionPage from './pages/PositionPage';
 import api from './api';
@@ -48,6 +49,7 @@ export default function App() {
         <Route path="/" element={<HomePage />} />
         <Route path="/settings" element={<SettingsPage />} />
         <Route path="/cv" element={<CvEditorPage />} />
+        <Route path="/onboard" element={<OnboardingPage />} />
         <Route path="/positions" element={<PositionsPage />} />
         <Route path="/positions/:id" element={<PositionPage />} />
         <Route path="*" element={<Navigate to="/" replace />} />

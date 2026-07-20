@@ -13,10 +13,11 @@ backend/
 │   └── mongo_store.py   # MongoDB stub (not implemented)
 ├── routes/
 │   ├── settings.py      # GET/PUT /api/settings, POST /api/settings/test-llm
-│   ├── cv.py            # GET/PUT /api/cv, POST /api/cv/ingest-pdf (stub)
+│   ├── cv.py            # GET/PUT /api/cv, POST onboarding (start/answer/confirm/progress), ingest-pdf stubs
 │   └── positions.py     # CRUD /api/positions (list, create, get, update, delete)
 ├── services/
 │   ├── llm.py            # LLMClient wrapping openai SDK (AsyncOpenAI)
+│   ├── onboarding.py     # OnboardingService: session state machine, prompt templates, answer processing, extracted→BaseCV conversion
 │   └── __init__.py
 └── requirements.txt
 ```
@@ -53,6 +54,10 @@ backend/
 **CV (`routes/cv.py`)**
 - `GET /api/cv` — returns CV or `{exists: false}`
 - `PUT /api/cv` — full replace of base CV
+- `POST /api/cv/onboard/start` — begins AI-guided onboarding, returns first question
+- `POST /api/cv/onboard/answer` — processes answer, returns next question or completion
+- `POST /api/cv/onboard/confirm` — finalizes extracted data to BaseCV, saves, deletes session
+- `GET /api/cv/onboard/progress/{session_id}` — returns section progress and extracted data
 - `POST /api/cv/ingest-pdf` — stub (501)
 - `POST /api/cv/ingest-pdf/confirm` — stub (501)
 
@@ -76,8 +81,15 @@ backend/
 - Registers settings, cv, positions routers
 - `GET /api/health` — status, has_cv, storage backend info
 
-## Not Yet Implemented
-- `services/onboarding.py` — onboarding state machine (Phase 3)
+**Onboarding (`services/onboarding.py`)**
+- `OnboardingService`: manages onboarding session state machine
+- 12-section progression: personal_info → professional_summary → career → formation → skills → tools → accomplishments → projects → certifications → programming_languages → spoken_languages → hobbies
+- `start_session()` — sends initial prompt, returns first question and extracted data
+- `process_answer()` — appends answer to conversation, calls LLM with full context, returns next question/done signal and merged extracted data
+- `extracted_to_base_cv()` — converts accumulated extracted_data dict to validated BaseCV model
+- System prompt instructs LLM to respond in JSON with `done`, `section`, `question`, `extracted` fields
+
+### Not Yet Implemented
 - `services/adapter.py` — CV tailoring logic (Phase 4)
 - `services/job_search.py` — web search aggregator (Phase 5)
 - `services/pdf_parser.py` — PDF text extraction (Phase 7)

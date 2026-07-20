@@ -691,9 +691,9 @@ vite>=5.0.0
 - [x] PositionsPage + PositionPage (basic CRUD, no adaptation).
 
 ### Phase 3: Onboarding
-- [ ] OnboardingService: session state, prompt templates, response parsing.
-- [ ] `/api/cv/onboard/start`, `answer`, `confirm` routes.
-- [ ] OnboardingPage + OnboardingChat frontend.
+- [x] OnboardingService: session state, prompt templates, response parsing.
+- [x] `/api/cv/onboard/start`, `answer`, `confirm` routes.
+- [x] OnboardingPage + OnboardingChat frontend.
 
 ### Phase 4: CV Adaptation & Export
 - [ ] AdapterService: prompt construction, response parsing, change summary.

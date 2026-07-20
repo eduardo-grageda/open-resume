@@ -20,10 +20,12 @@ frontend/
     ├── api.js             # Fetch wrapper for all backend endpoints
     ├── components/
     │   ├── Layout.jsx     # Sidebar nav + main content area
-    │   └── MdEditor.jsx   # Split-pane markdown editor with toolbar + live preview
+    │   ├── MdEditor.jsx   # Split-pane markdown editor with toolbar + live preview
+    │   └── OnboardingChat.jsx  # Chat-bubble Q&A interface with typing indicator
     └── pages/
         ├── HomePage.jsx       # Dashboard: CV summary card + recent positions
         ├── SettingsPage.jsx   # AI provider, API keys, storage, search config
+        ├── OnboardingPage.jsx # AI-guided interview wizard with start form, chat, progress bar, review grid
         ├── CvEditorPage.jsx   # Markdown CV editor with template, save to backend
         ├── PositionsPage.jsx  # List positions grouped by company, create/delete
         └── PositionPage.jsx   # Single position: 3 tabs (JD, Tailored CV, Export)
@@ -37,7 +39,7 @@ frontend/
 
 ## API Client (`api.js`)
 - Base URL: `/api`
-- Methods: `health`, `getSettings`, `updateSettings`, `testLlm`, `getCv`, `updateCv`, `ingestPdf`, `listPositions`, `getPosition`, `createPosition`, `updatePosition`, `deletePosition`
+- Methods: `health`, `getSettings`, `updateSettings`, `testLlm`, `getCv`, `updateCv`, `ingestPdf`, `onboardStart`, `onboardAnswer`, `onboardConfirm`, `onboardProgress`, `listPositions`, `getPosition`, `createPosition`, `updatePosition`, `deletePosition`
 - Handles JSON serialization, error extraction from response body
 
 ## Pages
@@ -60,6 +62,12 @@ frontend/
 - Toggle between markdown and structured edit mode (structured mode placeholder)
 - Save writes back full CV via PUT
 
+### OnboardingPage (`/onboard`)
+- Multi-step AI-guided CV builder
+  - **Step 1 — Start**: Form for first name (required), last name, target role; calls `POST /api/cv/onboard/start`
+  - **Step 2 — Chat**: OnboardingChat component with alternating AI/user bubbles; progress bar showing completed sections out of 12; calls `POST /api/cv/onboard/answer` for each response
+  - **Step 3 — Review**: Collapsible review grid organized by section (accordion cards with green/blue dots); editable fields for each data type (strings, arrays, nested objects); "Save CV" calls `POST /api/cv/onboard/confirm` then redirects to `/cv`
+
 ### PositionsPage (`/positions`)
 - Lists positions grouped by company name (accordion-style cards)
 - Create form: company name, job title, source URL, job description (markdown)
@@ -78,7 +86,7 @@ frontend/
 
 ### Layout
 - Fixed sidebar (220px) with brand "Open Resume"
-- NavLink items: Dashboard, Base CV, Positions (highlighted when active)
+- NavLink items: Dashboard, Base CV, Onboarding, Positions (highlighted when active)
 - Settings link at bottom
 - Main content area with left margin offset
 
@@ -89,8 +97,13 @@ frontend/
 - Split-pane: textarea (left) + ReactMarkdown rendered preview (right)
 - Props: `value`, `onChange`, `readOnly`
 
+### OnboardingChat
+- Chat-bubble interface with AI/user role indicators
+- Auto-scroll to bottom on new messages
+- Typing indicator ("AI is thinking...") with animated dots while waiting
+- Text input with Enter-to-send (Shift+Enter for newline)
+
 ## Not Yet Implemented
-- OnboardingPage + OnboardingChat (Phase 3)
 - SearchJobsPage + JobSearchFilters (Phase 5)
 - AdaptedPreview component
 - PdfUploader component

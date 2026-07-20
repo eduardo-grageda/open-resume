@@ -3,7 +3,8 @@
 ## Current Status
 
 **Phase 1 (Backend Core):** Complete  
-**Phase 2 (Frontend Foundation):** Complete
+**Phase 2 (Frontend Foundation):** Complete  
+**Phase 3 (Onboarding):** Complete
 
 ### What exists
 
@@ -16,7 +17,7 @@
 
 ### What does NOT exist yet
 
-- Onboarding wizard (Phase 3)
+- Onboarding wizard (Phase 3) — COMPLETE
 - CV adaptation / export to PDF (Phase 4)
 - Job search integration (Phase 5)
 - MongoDB adapter implementation (Phase 6)

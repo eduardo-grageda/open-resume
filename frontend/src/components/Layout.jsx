@@ -14,6 +14,9 @@ export default function Layout({ children }) {
           <NavLink to="/cv" className={({ isActive }) => `sidebar-link ${isActive ? 'active' : ''}`}>
             Base CV
           </NavLink>
+          <NavLink to="/onboard" className={({ isActive }) => `sidebar-link ${isActive ? 'active' : ''}`}>
+            Onboarding
+          </NavLink>
           <NavLink to="/positions" className={({ isActive }) => `sidebar-link ${isActive ? 'active' : ''}`}>
             Positions
           </NavLink>

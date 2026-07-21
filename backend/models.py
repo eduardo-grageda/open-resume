@@ -151,3 +151,16 @@ class SettingsUpdate(BaseModel):
     mongo_uri: Optional[str] = None
     search_provider: Optional[str] = None
     search_api_key: Optional[str] = None
+
+
+class SearchRequest(BaseModel):
+    query: str
+    location: str = ""
+    remote: bool = False
+    job_type: str = ""
+    experience_level: str = ""
+    date_posted: str = ""
+
+
+class SearchImportRequest(BaseModel):
+    search_result: dict

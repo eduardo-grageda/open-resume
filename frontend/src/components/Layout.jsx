@@ -20,6 +20,9 @@ export default function Layout({ children }) {
           <NavLink to="/positions" className={({ isActive }) => `sidebar-link ${isActive ? 'active' : ''}`}>
             Positions
           </NavLink>
+          <NavLink to="/search" className={({ isActive }) => `sidebar-link ${isActive ? 'active' : ''}`}>
+            Search Jobs
+          </NavLink>
         </nav>
         <div style={{ padding: '0 0.75rem' }}>
           <NavLink to="/settings" className={({ isActive }) => `sidebar-link ${isActive ? 'active' : ''}`}>

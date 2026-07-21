@@ -21,14 +21,16 @@ frontend/
     ├── components/
     │   ├── Layout.jsx     # Sidebar nav + main content area
     │   ├── MdEditor.jsx   # Split-pane markdown editor with toolbar + live preview
-    │   └── OnboardingChat.jsx  # Chat-bubble Q&A interface with typing indicator
+    │   ├── OnboardingChat.jsx  # Chat-bubble Q&A interface with typing indicator
+    │   └── JobSearchFilters.jsx  # Filter form: keywords, location, remote, experience, date
     └── pages/
         ├── HomePage.jsx       # Dashboard: CV summary card + recent positions
         ├── SettingsPage.jsx   # AI provider, API keys, storage, search config
         ├── OnboardingPage.jsx # AI-guided interview wizard with start form, chat, progress bar, review grid
         ├── CvEditorPage.jsx   # Markdown CV editor with template, save to backend
         ├── PositionsPage.jsx  # List positions grouped by company, create/delete
-        └── PositionPage.jsx   # Single position: 3 tabs (JD, Tailored CV, Export)
+        ├── PositionPage.jsx   # Single position: 3 tabs (JD, Tailored CV, Export)
+        └── SearchJobsPage.jsx    # Web job search with filters, results, import flow
 ```
 
 ## Design System (`App.css`)
@@ -39,7 +41,7 @@ frontend/
 
 ## API Client (`api.js`)
 - Base URL: `/api`
-- Methods: `health`, `getSettings`, `updateSettings`, `testLlm`, `getCv`, `updateCv`, `ingestPdf`, `onboardStart`, `onboardAnswer`, `onboardConfirm`, `onboardProgress`, `listPositions`, `getPosition`, `createPosition`, `updatePosition`, `deletePosition`, `adaptPosition`, `exportMarkdownUrl`, `exportPdfUrl`
+- Methods: `health`, `getSettings`, `updateSettings`, `testLlm`, `getCv`, `updateCv`, `ingestPdf`, `onboardStart`, `onboardAnswer`, `onboardConfirm`, `onboardProgress`, `listPositions`, `getPosition`, `createPosition`, `updatePosition`, `deletePosition`, `adaptPosition`, `exportMarkdownUrl`, `exportPdfUrl`, `searchJobs`, `getSearchSources`, `extractJd`
 - Handles JSON serialization, error extraction from response body
 
 ## Pages
@@ -82,13 +84,26 @@ frontend/
   - **Export**: Markdown download via backend endpoint, PDF download via weasyprint backend endpoint, print preview
 - All updates go through PUT `/api/positions/{id}`
 
+### SearchJobsPage (`/search`)
+- Filter form (JobSearchFilters component): keywords, location, remote toggle, experience level, job type, date posted
+- Calls `POST /api/search/jobs` with filter payload
+- Results list with job cards: title (linked), company, location, snippet, source badge, posted date
+- "Import" button on each result: fetches JD via `POST /api/search/extract-jd`, creates Position, redirects to `/positions/:id`
+- Loading, empty, and error states handled
+
 ## Components
 
 ### Layout
 - Fixed sidebar (220px) with brand "Open Resume"
-- NavLink items: Dashboard, Base CV, Onboarding, Positions (highlighted when active)
+- NavLink items: Dashboard, Base CV, Onboarding, Positions, Search Jobs (highlighted when active)
 - Settings link at bottom
 - Main content area with left margin offset
+
+### JobSearchFilters
+- Props: `filters`, `onChange`, `onSearch`, `loading`
+- Two-column grid layout for filter inputs
+- Keywords, location, experience level dropdown, job type dropdown, date posted dropdown, remote checkbox
+- Submit button triggers parent search
 
 ### MdEditor
 - Toolbar: B, I, H1, H2, H3, Link, List, Num, Code, inline code
@@ -104,7 +119,6 @@ frontend/
 - Text input with Enter-to-send (Shift+Enter for newline)
 
 ## Not Yet Implemented
-- SearchJobsPage + JobSearchFilters (Phase 5)
 - AdaptedPreview component
 - PdfUploader component
 - PositionCard component (inlined in PositionsPage currently)

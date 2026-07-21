@@ -56,6 +56,11 @@ export const api = {
   adaptPosition: (id) => request('POST', `/positions/${id}/adapt`),
   exportMarkdownUrl: (id) => `${BASE}/positions/${id}/export/md`,
   exportPdfUrl: (id) => `${BASE}/positions/${id}/export/pdf`,
+
+  // Search
+  searchJobs: (body) => request('POST', '/search/jobs', body),
+  getSearchSources: () => request('GET', '/search/sources'),
+  extractJd: (body) => request('POST', '/search/extract-jd', body),
 };
 
 export default api;

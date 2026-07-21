@@ -5,7 +5,8 @@
 **Phase 1 (Backend Core):** Complete  
 **Phase 2 (Frontend Foundation):** Complete  
 **Phase 3 (Onboarding):** Complete  
-**Phase 4 (CV Adaptation & Export):** Complete
+**Phase 4 (CV Adaptation & Export):** Complete  
+**Phase 5 (Job Search):** Complete
 
 ### What exists
 
@@ -20,7 +21,7 @@
 
 - Onboarding wizard (Phase 3) — COMPLETE
 - CV adaptation / export to PDF (Phase 4) — COMPLETE
-- Job search integration (Phase 5)
+- Job search integration (Phase 5) — COMPLETE
 - MongoDB adapter implementation (Phase 6)
 - Docker setup (Phase 6)
 - PDF ingest, URL scraping, polish (Phase 7)

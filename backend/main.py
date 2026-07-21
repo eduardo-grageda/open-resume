@@ -10,6 +10,7 @@ from backend.config import load_config
 from backend.database import get_storage
 from backend.routes.cv import router as cv_router
 from backend.routes.positions import router as positions_router
+from backend.routes.search import router as search_router
 from backend.routes.settings import router as settings_router
 
 logging.basicConfig(level=logging.INFO)
@@ -46,6 +47,7 @@ app.add_middleware(
 app.include_router(settings_router)
 app.include_router(cv_router)
 app.include_router(positions_router)
+app.include_router(search_router)
 
 
 @app.get("/api/health")

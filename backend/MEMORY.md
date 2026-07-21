@@ -14,11 +14,13 @@ backend/
 ├── routes/
 │   ├── settings.py      # GET/PUT /api/settings, POST /api/settings/test-llm
 │   ├── cv.py            # GET/PUT /api/cv, POST onboarding (start/answer/confirm/progress), ingest-pdf stubs
-│   └── positions.py     # CRUD /api/positions, adapt, export md/pdf
+│   ├── positions.py     # CRUD /api/positions, adapt, export md/pdf
+│   └── search.py        # POST /api/search/jobs, GET /api/search/sources, POST /api/search/extract-jd
 ├── services/
 │   ├── llm.py            # LLMClient wrapping openai SDK (AsyncOpenAI)
 │   ├── onboarding.py     # OnboardingService: session state machine, prompt templates, answer processing, extracted→BaseCV conversion
 │   ├── adapter.py        # AdapterService: CV tailoring via LLM, prompt construction, response parsing
+│   ├── job_search.py     # JobSearchService: SerpAPI + Brave Search, JD extraction via LLM
 │   └── __init__.py
 └── requirements.txt
 ```
@@ -38,6 +40,8 @@ backend/
 - `OnboardingSession` — conversation state for onboarding wizard
 - `ConversationMessage` — role + content message
 - `SettingsUpdate` — partial settings update model
+- `SearchRequest` — job search query with filters (query, location, remote, job_type, experience_level, date_posted)
+- `SearchImportRequest` — import a search result as a position
 
 ### Storage (`database/`)
 - `StorageBackend` ABC: get_cv, save_cv, get_config, save_config, list_positions, get_position, save_position, delete_position, get/save/delete onboarding sessions
@@ -72,6 +76,11 @@ backend/
 - `GET /api/positions/{position_id}/export/md` — download tailored CV as .md
 - `GET /api/positions/{position_id}/export/pdf` — generate + download PDF via weasyprint
 
+**Search (`routes/search.py`)**
+- `POST /api/search/jobs` — search open positions via configured provider (SerpAPI / Brave Search)
+- `GET /api/search/sources` — list available search providers
+- `POST /api/search/extract-jd` — fetch URL, extract job description via LLM
+
 ### Services
 
 **LLM (`services/llm.py`)**
@@ -95,13 +104,21 @@ backend/
 - `_parse_response()` — splits LLM output into tailored CV markdown and change summary using `---` separator
 - System prompt instructs LLM to never invent content, only reorder/emphasize/de-emphasize/omit
 
+**Job Search (`services/job_search.py`)**
+- `JobSearchService`: search aggregation via SerpAPI (Google Jobs engine) and Brave Search
+- `search()` — dispatches to provider-specific method based on config, normalizes results
+- `_search_serpapi()` — queries SerpAPI Google Jobs, parses `jobs_results`
+- `_search_brave()` — queries Brave Search web API with job-focused query construction
+- `_normalize_results()` — maps provider-specific fields to common schema (title, company, location, url, description_snippet, source, posted_date)
+- `extract_jd()` — fetches URL via httpx, strips HTML with BeautifulSoup, sends text to LLM for clean markdown extraction
+- `get_available_sources()` — returns `["serpapi", "brave"]`
+
 ### Main (`main.py`)
 - FastAPI app with CORS (localhost:5173)
-- Registers settings, cv, positions routers
+- Registers settings, cv, positions, search routers
 - `GET /api/health` — status, has_cv, storage backend info
 
 ### Not Yet Implemented
-- `services/job_search.py` — web search aggregator (Phase 5)
 - `services/pdf_parser.py` — PDF text extraction (Phase 7)
 - URL JD scraping
 - MongoStore full implementation (Phase 6)

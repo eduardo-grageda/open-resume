@@ -14,6 +14,8 @@ export default function PositionPage() {
   const [error, setError] = useState(null);
   const [activeTab, setActiveTab] = useState('description');
   const [saving, setSaving] = useState(false);
+  const [adapting, setAdapting] = useState(false);
+  const [exporting, setExporting] = useState(false);
   const [editMode, setEditMode] = useState(false);
   const [editField, setEditField] = useState('');
 
@@ -42,6 +44,18 @@ export default function PositionPage() {
       setError(err.message);
     }
     setSaving(false);
+  }
+
+  async function handleAdapt() {
+    setAdapting(true);
+    setError(null);
+    try {
+      const data = await api.adaptPosition(id);
+      setPosition(data.position);
+    } catch (err) {
+      setError(err.message);
+    }
+    setAdapting(false);
   }
 
   async function handleDelete() {
@@ -169,11 +183,27 @@ export default function PositionPage() {
                   <ReactMarkdown>{position.change_summary}</ReactMarkdown>
                 </div>
               )}
+              <div className="inline-row gap-1 mt-2">
+                <button
+                  className="btn btn-primary btn-sm"
+                  onClick={handleAdapt}
+                  disabled={adapting}
+                >
+                  {adapting ? 'Regenerating...' : 'Regenerate'}
+                </button>
+              </div>
             </div>
           ) : (
             <div className="empty-state">
               <h3>No tailored CV yet</h3>
-              <p>CV adaptation will be available in a future update.</p>
+              <p>Generate a CV tailored to this job description using AI.</p>
+              <button
+                className="btn btn-primary"
+                onClick={handleAdapt}
+                disabled={adapting}
+              >
+                {adapting ? 'Generating...' : 'Generate Tailored CV'}
+              </button>
             </div>
           )}
         </div>
@@ -193,20 +223,22 @@ export default function PositionPage() {
                 />
               </div>
               <div className="inline-row gap-1">
-                <button
+                <a
                   className="btn btn-primary btn-sm"
-                  onClick={() => {
-                    const blob = new Blob([position.tailored_cv_md], { type: 'text/markdown' });
-                    const url = URL.createObjectURL(blob);
-                    const a = document.createElement('a');
-                    a.href = url;
-                    a.download = `${position.company_slug || 'cv'}-tailored.md`;
-                    a.click();
-                    URL.revokeObjectURL(url);
-                  }}
+                  href={api.exportMarkdownUrl(id)}
+                  download
                 >
                   Download Markdown
-                </button>
+                </a>
+                <a
+                  className="btn btn-secondary btn-sm"
+                  href={api.exportPdfUrl(id)}
+                  download
+                  onClick={() => setExporting(true)}
+                  onLoad={() => setExporting(false)}
+                >
+                  {exporting ? 'Exporting...' : 'Download PDF'}
+                </a>
                 <button
                   className="btn btn-secondary btn-sm"
                   onClick={() => {

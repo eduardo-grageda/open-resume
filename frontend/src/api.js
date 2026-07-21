@@ -53,6 +53,9 @@ export const api = {
   createPosition: (body) => request('POST', '/positions', body),
   updatePosition: (id, body) => request('PUT', `/positions/${id}`, body),
   deletePosition: (id) => request('DELETE', `/positions/${id}`),
+  adaptPosition: (id) => request('POST', `/positions/${id}/adapt`),
+  exportMarkdownUrl: (id) => `${BASE}/positions/${id}/export/md`,
+  exportPdfUrl: (id) => `${BASE}/positions/${id}/export/pdf`,
 };
 
 export default api;

@@ -39,7 +39,7 @@ frontend/
 
 ## API Client (`api.js`)
 - Base URL: `/api`
-- Methods: `health`, `getSettings`, `updateSettings`, `testLlm`, `getCv`, `updateCv`, `ingestPdf`, `onboardStart`, `onboardAnswer`, `onboardConfirm`, `onboardProgress`, `listPositions`, `getPosition`, `createPosition`, `updatePosition`, `deletePosition`
+- Methods: `health`, `getSettings`, `updateSettings`, `testLlm`, `getCv`, `updateCv`, `ingestPdf`, `onboardStart`, `onboardAnswer`, `onboardConfirm`, `onboardProgress`, `listPositions`, `getPosition`, `createPosition`, `updatePosition`, `deletePosition`, `adaptPosition`, `exportMarkdownUrl`, `exportPdfUrl`
 - Handles JSON serialization, error extraction from response body
 
 ## Pages
@@ -78,8 +78,8 @@ frontend/
 - Header: job title, company, status badge, edit/save/delete buttons
 - Three tabs:
   - **Job Description**: Read-only markdown render, "Edit" button for inline editing of title, company, JD
-  - **Tailored CV**: MdEditor for CV editing (if exists), change summary callout, "Generate" placeholder for future adaptation
-  - **Export**: Markdown download as `.md` file, print preview (opens new window)
+  - **Tailored CV**: MdEditor for CV editing (if generated), change summary callout, "Generate Tailored CV" / "Regenerate" button calling `POST /api/positions/{id}/adapt`
+  - **Export**: Markdown download via backend endpoint, PDF download via weasyprint backend endpoint, print preview
 - All updates go through PUT `/api/positions/{id}`
 
 ## Components
@@ -109,4 +109,3 @@ frontend/
 - PdfUploader component
 - PositionCard component (inlined in PositionsPage currently)
 - Structured CV editing mode (placeholder in CvEditorPage)
-- Generation/regeneration of tailored CVs (adaptation API)

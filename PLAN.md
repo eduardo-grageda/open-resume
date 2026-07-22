@@ -708,11 +708,11 @@ vite>=5.0.0
 - [ ] "Import as Position" flow with LLM JD extraction.
 
 ### Phase 6: MongoDB & Docker
-- [ ] MongoDB storage adapter.
-- [ ] Migration script (JSON ↔ MongoDB).
-- [ ] Dockerfile for backend + frontend.
-- [ ] docker-compose.yml with MongoDB service.
-- [ ] `run.sh` and `start-docker.sh` scripts.
+- [x] MongoDB storage adapter.
+- [x] Migration script (JSON ↔ MongoDB).
+- [x] Dockerfile for backend + frontend.
+- [x] docker-compose.yml with MongoDB service.
+- [x] `run.sh` and `start-docker.sh` scripts.
 
 ### Phase 7: Polish
 - [ ] PDF ingest (upload + LLM parse + review).

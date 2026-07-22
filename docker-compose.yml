@@ -1,0 +1,36 @@
+services:
+  backend:
+    build: .
+    ports:
+      - "${PORT:-8000}:8000"
+    environment:
+      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY:-}
+      - OPENROUTER_BASE_URL=${OPENROUTER_BASE_URL:-https://openrouter.ai/api/v1}
+      - OPENROUTER_MODEL=${OPENROUTER_MODEL:-openai/gpt-4o}
+      - STORAGE_BACKEND=${STORAGE_BACKEND:-json}
+      - MONGO_URI=${MONGO_URI:-mongodb://mongo:27017}
+      - SEARCH_PROVIDER=${SEARCH_PROVIDER:-serpapi}
+      - SEARCH_API_KEY=${SEARCH_API_KEY:-}
+    volumes:
+      - ./data:/app/data
+
+  frontend:
+    build: ./frontend
+    ports:
+      - "${FRONTEND_PORT:-5173}:5173"
+    depends_on:
+      - backend
+    environment:
+      - VITE_BACKEND_URL=http://backend:8000
+
+  mongo:
+    image: mongo:7
+    ports:
+      - "${MONGO_PORT:-27017}:27017"
+    volumes:
+      - mongo_data:/data/db
+    profiles:
+      - mongodb
+
+volumes:
+  mongo_data:

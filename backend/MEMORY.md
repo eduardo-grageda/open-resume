@@ -7,10 +7,11 @@ backend/
 ├── main.py              # FastAPI app, CORS, lifespan, route registration
 ├── config.py            # AppConfig model, env/file loader, save
 ├── models.py            # All Pydantic v2 schemas
+├── migrate.py           # JSON ↔ MongoDB data migration script
 ├── database/
 │   ├── __init__.py      # StorageBackend ABC + factory (get_storage)
 │   ├── json_store.py    # Full JSON file-based storage implementation
-│   └── mongo_store.py   # MongoDB stub (not implemented)
+│   └── mongo_store.py   # Full MongoDB storage implementation (pymongo AsyncMongoClient)
 ├── routes/
 │   ├── settings.py      # GET/PUT /api/settings, POST /api/settings/test-llm
 │   ├── cv.py            # GET/PUT /api/cv, POST onboarding (start/answer/confirm/progress), ingest-pdf stubs
@@ -46,8 +47,13 @@ backend/
 ### Storage (`database/`)
 - `StorageBackend` ABC: get_cv, save_cv, get_config, save_config, list_positions, get_position, save_position, delete_position, get/save/delete onboarding sessions
 - `JsonStore` — full implementation using `data/` directory
-- `MongoStore` — importable stub, will raise NotImplementedError
+- `MongoStore` — full implementation using pymongo AsyncMongoClient with lazy connection
 - `get_storage()` factory — returns JsonStore or MongoStore based on config
+
+### Migration (`migrate.py`)
+- CLI tool: `python backend/migrate.py {json-to-mongo,mongo-to-json}`
+- Migrates config, base CV, positions, and onboarding sessions between backends
+- Updates storage_backend setting after migration
 
 ### Routes
 
@@ -121,5 +127,3 @@ backend/
 ### Not Yet Implemented
 - `services/pdf_parser.py` — PDF text extraction (Phase 7)
 - URL JD scraping
-- MongoStore full implementation (Phase 6)
-- Migration script JSON ↔ MongoDB (Phase 6)

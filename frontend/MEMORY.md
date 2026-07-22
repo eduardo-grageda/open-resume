@@ -11,7 +11,8 @@
 ```
 frontend/
 ├── package.json
-├── vite.config.js
+├── vite.config.js       # Vite config (supports VITE_BACKEND_URL env var for Docker)
+├── Dockerfile            # Node 18-alpine dev container
 ├── index.html
 └── src/
     ├── main.jsx           # React root, BrowserRouter wrapper

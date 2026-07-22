@@ -23,6 +23,18 @@ An open-source, local-first web tool for managing a comprehensive base CV, searc
 
 ### Setup
 
+**Automated (recommended):**
+
+```bash
+chmod +x install.sh && ./install.sh      # Linux / macOS
+# or
+powershell -ExecutionPolicy Bypass -File install.ps1   # Windows
+```
+
+The script checks prerequisites, creates a virtual environment, installs all dependencies, and creates `.env` from the template.
+
+**Manual:**
+
 ```bash
 # Clone the repository
 git clone https://github.com/your-org/open-resume.git

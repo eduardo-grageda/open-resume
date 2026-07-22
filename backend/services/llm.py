@@ -60,7 +60,17 @@ class LLMClient:
             max_tokens=max_tokens,
             response_format=response_format,
         )
-        content = response.choices[0].message.content or ""
+        choice = response.choices[0]
+        content = choice.message.content or ""
+        if not content and choice.finish_reason:
+            logger.error(
+                "LLM returned empty content (finish_reason=%s, model=%s)",
+                choice.finish_reason,
+                response.model or self.model,
+            )
+            raise RuntimeError(
+                f"LLM returned empty response (finish_reason={choice.finish_reason})"
+            )
         return content
 
     async def chat_json(

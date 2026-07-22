@@ -61,6 +61,34 @@ async def delete_position(position_id: str, storage: StorageBackend = Depends(_g
     return {"ok": True}
 
 
+@router.post("/ingest-url")
+async def ingest_url(body: dict, storage: StorageBackend = Depends(_get_storage)):
+    url = (body.get("url") or "").strip()
+
+    if not url:
+        raise HTTPException(status_code=400, detail="url is required")
+
+    from backend.services.job_search import JobSearchService
+
+    service = JobSearchService()
+
+    try:
+        jd_md = await service.extract_jd(url)
+    except RuntimeError as e:
+        raise HTTPException(status_code=502, detail=str(e)) from e
+
+    position = Position(
+        company_name="",
+        job_title="",
+        job_description_md=jd_md,
+        job_source_url=url,
+        job_source_type="url",
+        status="new",
+    )
+
+    return {"position": position.model_dump()}
+
+
 @router.post("/{position_id}/adapt")
 async def adapt_position(position_id: str, storage: StorageBackend = Depends(_get_storage)):
     pos = await storage.get_position(position_id)

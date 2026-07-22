@@ -1,11 +1,13 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import api from '../api';
+import LoadingSpinner from '../components/LoadingSpinner';
 
 export default function PositionsPage() {
   const [positions, setPositions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
+  const [showUrlForm, setShowUrlForm] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
   const [filter, setFilter] = useState('');
@@ -17,6 +19,8 @@ export default function PositionsPage() {
     job_source_url: '',
     job_source_type: 'paste',
   });
+
+  const [urlForm, setUrlForm] = useState({ url: '' });
 
   useEffect(() => {
     loadPositions();
@@ -51,6 +55,25 @@ export default function PositionsPage() {
     setSaving(false);
   }
 
+  async function handleUrlIngest(e) {
+    e.preventDefault();
+    if (!urlForm.url.trim()) {
+      setError('Please enter a URL.');
+      return;
+    }
+    setSaving(true);
+    setError(null);
+    try {
+      const data = await api.ingestUrl(urlForm);
+      setPositions(prev => [...prev, data.position]);
+      setShowUrlForm(false);
+      setUrlForm({ url: '' });
+    } catch (err) {
+      setError(err.message);
+    }
+    setSaving(false);
+  }
+
   async function handleDelete(id) {
     if (!confirm('Delete this position?')) return;
     try {
@@ -73,7 +96,7 @@ export default function PositionsPage() {
 
   const companies = Object.keys(grouped).sort();
 
-  if (loading) return null;
+  if (loading) return <LoadingSpinner text="Loading positions..." />;
 
   return (
     <div>
@@ -82,12 +105,35 @@ export default function PositionsPage() {
           <h1>Positions</h1>
           <p>Manage your job applications and tailored resumes.</p>
         </div>
-        <button className="btn btn-primary" onClick={() => setShowForm(!showForm)}>
-          {showForm ? 'Cancel' : 'Add Position'}
-        </button>
+        <div className="inline-row gap-1">
+          <button className="btn btn-secondary btn-sm" onClick={() => { setShowUrlForm(!showUrlForm); setShowForm(false); }}>
+            {showUrlForm ? 'Cancel' : 'Add from URL'}
+          </button>
+          <button className="btn btn-primary" onClick={() => { setShowForm(!showForm); setShowUrlForm(false); }}>
+            {showForm ? 'Cancel' : 'Add Position'}
+          </button>
+        </div>
       </div>
 
       {error && <div className="alert alert-error">{error}</div>}
+
+      {showUrlForm && (
+        <div className="card mb-3">
+          <h3 style={{ fontSize: '1rem', marginBottom: '1rem' }}>Import Job from URL</h3>
+          <p className="text-sm text-secondary mb-2">
+            Paste a link to a job listing. The AI will scrape the page and extract the job description.
+          </p>
+          <form onSubmit={handleUrlIngest}>
+            <div className="form-group">
+              <label htmlFor="url-input">Job Listing URL *</label>
+              <input id="url-input" name="url" value={urlForm.url} onChange={e => setUrlForm({ url: e.target.value })} required placeholder="https://..." />
+            </div>
+            <button type="submit" className="btn btn-primary" disabled={saving}>
+              {saving ? 'Importing...' : 'Import from URL'}
+            </button>
+          </form>
+        </div>
+      )}
 
       {showForm && (
         <div className="card mb-3">

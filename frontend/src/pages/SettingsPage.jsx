@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import api from '../api';
+import LoadingSpinner from '../components/LoadingSpinner';
 
 export default function SettingsPage({ onConfigSaved }) {
   const [loading, setLoading] = useState(true);
@@ -11,7 +12,7 @@ export default function SettingsPage({ onConfigSaved }) {
   const [form, setForm] = useState({
     openrouter_api_key: '',
     openrouter_base_url: 'https://openrouter.ai/api/v1',
-    openrouter_model: 'openai/gpt-4o',
+    openrouter_model: 'deepseek/deepseek-v4-pro',
     storage_backend: 'json',
     mongo_uri: 'mongodb://localhost:27017',
     search_provider: 'serpapi',
@@ -53,7 +54,9 @@ export default function SettingsPage({ onConfigSaved }) {
   async function handleTest() {
     setTesting(true);
     setTestResult(null);
+    setMessage(null);
     try {
+      await api.updateSettings(form);
       const r = await api.testLlm();
       setTestResult({ ok: r.ok, model: r.model });
     } catch (err) {
@@ -62,7 +65,7 @@ export default function SettingsPage({ onConfigSaved }) {
     setTesting(false);
   }
 
-  if (loading) return null;
+  if (loading) return <LoadingSpinner text="Loading settings..." />;
 
   return (
     <div>
@@ -107,7 +110,7 @@ export default function SettingsPage({ onConfigSaved }) {
               name="openrouter_model"
               value={form.openrouter_model}
               onChange={handleChange}
-              placeholder="openai/gpt-4o"
+              placeholder="deepseek/deepseek-v4-pro"
             />
           </div>
           <div className="inline-row">

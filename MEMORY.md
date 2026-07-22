@@ -7,7 +7,8 @@
 **Phase 3 (Onboarding):** Complete  
 **Phase 4 (CV Adaptation & Export):** Complete  
 **Phase 5 (Job Search):** Complete  
-**Phase 6 (MongoDB & Docker):** Complete
+**Phase 6 (MongoDB & Docker):** Complete  
+**Phase 7 (Polish):** Complete
 
 ### What exists
 
@@ -23,14 +24,15 @@
 - `backend/routes/positions.py` — full CRUD for positions.
 - `backend/migrate.py` — JSON ↔ MongoDB data migration tool.
 
+- `README.md` — comprehensive documentation with quick start, usage guide, and configuration reference.
+
 ### What does NOT exist yet
 
-- PDF ingest, URL scraping, polish (Phase 7)
 - Tests, linting
 
 ### Key decisions
 
-- Default AI model: `openai/gpt-4o` via OpenRouter
+- Default AI model: `deepseek/deepseek-v4-pro` via OpenRouter
 - PDF: weasyprint (no LaTeX)
 - Web search: SerpAPI first, Brave Search secondary
 - Ports: backend :8000, frontend :5173

@@ -23,7 +23,11 @@ frontend/
     │   ├── Layout.jsx     # Sidebar nav + main content area
     │   ├── MdEditor.jsx   # Split-pane markdown editor with toolbar + live preview
     │   ├── OnboardingChat.jsx  # Chat-bubble Q&A interface with typing indicator
-    │   └── JobSearchFilters.jsx  # Filter form: keywords, location, remote, experience, date
+    │   ├── JobSearchFilters.jsx  # Filter form: keywords, location, remote, experience, date
+    │   ├── PdfUploader.jsx     # Drag-and-drop PDF upload with AI parsing
+    │   ├── AdaptedPreview.jsx  # Print-friendly CV preview with print button
+    │   ├── PositionCard.jsx    # Reusable position list item card
+    │   └── LoadingSpinner.jsx  # Reusable loading indicator
     └── pages/
         ├── HomePage.jsx       # Dashboard: CV summary card + recent positions
         ├── SettingsPage.jsx   # AI provider, API keys, storage, search config
@@ -61,9 +65,11 @@ frontend/
 
 ### CvEditorPage (`/cv`)
 - Loads existing CV from backend, converts to markdown, or shows default template
-- MdEditor for markdown editing with live preview
+- Two tabs: Editor (markdown/structured) and Import PDF
+- Editor tab: MdEditor for markdown editing with live preview
+- Import PDF tab: PdfUploader for drag-and-drop upload, AI parsing, review before save
 - Toggle between markdown and structured edit mode (structured mode placeholder)
-- Save writes back full CV via PUT
+- Save writes back full CV via PUT or PDF confirm endpoint
 
 ### OnboardingPage (`/onboard`)
 - Multi-step AI-guided CV builder
@@ -74,6 +80,7 @@ frontend/
 ### PositionsPage (`/positions`)
 - Lists positions grouped by company name (accordion-style cards)
 - Create form: company name, job title, source URL, job description (markdown)
+- "Add from URL" form: paste job listing URL, AI scrapes and extracts JD
 - Filter input for company/title search
 - Delete with confirmation
 
@@ -82,7 +89,7 @@ frontend/
 - Three tabs:
   - **Job Description**: Read-only markdown render, "Edit" button for inline editing of title, company, JD
   - **Tailored CV**: MdEditor for CV editing (if generated), change summary callout, "Generate Tailored CV" / "Regenerate" button calling `POST /api/positions/{id}/adapt`
-  - **Export**: Markdown download via backend endpoint, PDF download via weasyprint backend endpoint, print preview
+  - **Export**: AdaptedPreview component with print-friendly rendering, Markdown download via backend endpoint, PDF download via weasyprint backend endpoint, print preview button
 - All updates go through PUT `/api/positions/{id}`
 
 ### SearchJobsPage (`/search`)
@@ -119,8 +126,25 @@ frontend/
 - Typing indicator ("AI is thinking...") with animated dots while waiting
 - Text input with Enter-to-send (Shift+Enter for newline)
 
-## Not Yet Implemented
-- AdaptedPreview component
-- PdfUploader component
-- PositionCard component (inlined in PositionsPage currently)
-- Structured CV editing mode (placeholder in CvEditorPage)
+### PdfUploader
+- Drag-and-drop zone with file type validation (.pdf only, max 10MB)
+- Uploads to `POST /api/cv/ingest-pdf`, returns parsed CV data
+- Visual feedback: drag-over highlight, uploading spinner, error messages
+- Props: `onParsed(cvData, rawText)` callback
+
+### AdaptedPreview
+- Rendered markdown with print-optimized CSS
+- Print Preview button opens new window with A4-page-styled content
+- Simple markdown-to-HTML converter for print output
+- Props: `markdown`, `jobTitle`, `companyName`
+
+### PositionCard
+- Reusable card component for position list items
+- Displays job title, company name, and status badge
+- Links to `/positions/:id`
+- Props: `position`
+
+### LoadingSpinner
+- Reusable loading indicator with animated spinner and optional text
+- Used by all pages instead of blank `return null` during data fetches
+- Props: `text` (default: "Loading...")

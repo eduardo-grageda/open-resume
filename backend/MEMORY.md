@@ -69,8 +69,8 @@ backend/
 - `POST /api/cv/onboard/answer` — processes answer, returns next question or completion
 - `POST /api/cv/onboard/confirm` — finalizes extracted data to BaseCV, saves, deletes session
 - `GET /api/cv/onboard/progress/{session_id}` — returns section progress and extracted data
-- `POST /api/cv/ingest-pdf` — stub (501)
-- `POST /api/cv/ingest-pdf/confirm` — stub (501)
+- `POST /api/cv/ingest-pdf` — upload PDF, extract text via pdfplumber, parse with LLM, return structured BaseCV
+- `POST /api/cv/ingest-pdf/confirm` — save parsed CV after user review
 
 **Positions (`routes/positions.py`)**
 - `GET /api/positions` — list all, optional `?company=` and `?status=` filters
@@ -78,6 +78,7 @@ backend/
 - `GET /api/positions/{position_id}` — single position
 - `PUT /api/positions/{position_id}` — full update
 - `DELETE /api/positions/{position_id}` — delete (removes directory)
+- `POST /api/positions/ingest-url` — scrape JD from URL via LLM, return draft Position
 - `POST /api/positions/{position_id}/adapt` — generate tailored CV via LLM
 - `GET /api/positions/{position_id}/export/md` — download tailored CV as .md
 - `GET /api/positions/{position_id}/export/pdf` — generate + download PDF via weasyprint
@@ -119,11 +120,16 @@ backend/
 - `extract_jd()` — fetches URL via httpx, strips HTML with BeautifulSoup, sends text to LLM for clean markdown extraction
 - `get_available_sources()` — returns `["serpapi", "brave"]`
 
+**PDF Parser (`services/pdf_parser.py`)**
+- `PdfParser`: extracts text from PDFs and parses into structured BaseCV via LLM
+- `extract_text()` — uses pdfplumber to extract text from PDF pages
+- `parse_to_cv()` — sends extracted text to LLM with structured JSON schema prompt
+- `parsed_to_base_cv()` — converts LLM JSON response to validated BaseCV model
+
 ### Main (`main.py`)
 - FastAPI app with CORS (localhost:5173)
 - Registers settings, cv, positions, search routers
 - `GET /api/health` — status, has_cv, storage backend info
 
 ### Not Yet Implemented
-- `services/pdf_parser.py` — PDF text extraction (Phase 7)
-- URL JD scraping
+- (none — all phases complete)

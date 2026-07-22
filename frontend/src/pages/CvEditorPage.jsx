@@ -1,5 +1,8 @@
 import { useState, useEffect, useCallback } from 'react';
+import ReactMarkdown from 'react-markdown';
 import MdEditor from '../components/MdEditor';
+import PdfUploader from '../components/PdfUploader';
+import LoadingSpinner from '../components/LoadingSpinner';
 import api from '../api';
 
 const DEFAULT_TEMPLATE = `# Your Name
@@ -146,6 +149,9 @@ export default function CvEditorPage() {
   const [message, setMessage] = useState(null);
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [activeTab, setActiveTab] = useState('editor');
+  const [parsedCv, setParsedCv] = useState(null);
+  const [rawText, setRawText] = useState('');
 
   useEffect(() => {
     loadCv();
@@ -210,19 +216,9 @@ export default function CvEditorPage() {
           certifications: [],
         };
         if (cv) {
-          cvData.personal_info = cv.personal_info;
-          cvData.career = cv.career;
-          cvData.formation = cv.formation;
-          cvData.skills = cv.skills;
-          cvData.tools = cv.tools;
-          cvData.accomplishments = cv.accomplishments;
-          cvData.hobbies = cv.hobbies;
-          cvData.languages = cv.languages;
-          cvData.projects = cv.projects;
-          cvData.certifications = cv.certifications;
+          cvData = cv;
+          cvData.professional_summary = markdown;
         }
-        setMessage({ type: 'info', text: 'Structured editing coming in Phase 3. Save edits below or toggle to structured mode.' });
-        return;
       } else {
         cvData = cv;
       }
@@ -235,7 +231,29 @@ export default function CvEditorPage() {
     setSaving(false);
   }
 
-  if (loading) return null;
+  async function handlePdfConfirm() {
+    if (!parsedCv) return;
+    setSaving(true);
+    setMessage(null);
+    try {
+      await api.ingestPdfConfirm(parsedCv);
+      setCv(parsedCv);
+      setMarkdown(cvToMarkdown(parsedCv));
+      setActiveTab('editor');
+      setParsedCv(null);
+      setMessage({ type: 'success', text: 'CV imported from PDF and saved.' });
+    } catch (err) {
+      setMessage({ type: 'error', text: err.message });
+    }
+    setSaving(false);
+  }
+
+  function handlePdfParsed(cvData, raw) {
+    setParsedCv(cvData);
+    setRawText(raw || '');
+  }
+
+  if (loading) return <LoadingSpinner text="Loading CV..." />;
 
   return (
     <div>
@@ -245,14 +263,26 @@ export default function CvEditorPage() {
           <p>{cv ? 'Edit your comprehensive base CV.' : 'Start by filling in the template below.'}</p>
         </div>
         <div className="inline-row gap-1">
-          {cv && (
+          {activeTab === 'editor' && cv && (
             <button type="button" className="btn btn-secondary btn-sm" onClick={toggleMode}>
               {mode === 'markdown' ? 'Structured Edit' : 'Markdown Edit'}
             </button>
           )}
-          <button type="button" className="btn btn-primary btn-sm" onClick={handleSave} disabled={saving}>
-            {saving ? 'Saving...' : 'Save CV'}
-          </button>
+          {activeTab === 'editor' && (
+            <button type="button" className="btn btn-primary btn-sm" onClick={handleSave} disabled={saving}>
+              {saving ? 'Saving...' : 'Save CV'}
+            </button>
+          )}
+          {activeTab === 'upload' && parsedCv && (
+            <>
+              <button type="button" className="btn btn-secondary btn-sm" onClick={() => setParsedCv(null)}>
+                Reset
+              </button>
+              <button type="button" className="btn btn-primary btn-sm" onClick={handlePdfConfirm} disabled={saving}>
+                {saving ? 'Saving...' : 'Confirm & Save'}
+              </button>
+            </>
+          )}
         </div>
       </div>
 
@@ -260,11 +290,20 @@ export default function CvEditorPage() {
         <div className={`alert alert-${message.type}`}>{message.text}</div>
       )}
 
-      {mode === 'markdown' && (
+      <div className="tabs">
+        <button className={`tab ${activeTab === 'editor' ? 'active' : ''}`} onClick={() => setActiveTab('editor')}>
+          Editor
+        </button>
+        <button className={`tab ${activeTab === 'upload' ? 'active' : ''}`} onClick={() => setActiveTab('upload')}>
+          Import PDF
+        </button>
+      </div>
+
+      {activeTab === 'editor' && mode === 'markdown' && (
         <MdEditor value={markdown} onChange={setMarkdown} />
       )}
 
-      {mode === 'structured' && cv && (
+      {activeTab === 'editor' && mode === 'structured' && cv && (
         <div className="card">
           <div className="tabs">
             <button className="tab active">Personal Info</button>
@@ -276,6 +315,46 @@ export default function CvEditorPage() {
             <button className="tab">Languages</button>
           </div>
           <p className="text-secondary text-sm">Structured editing will be available in a future update.</p>
+        </div>
+      )}
+
+      {activeTab === 'upload' && (
+        <div>
+          {!parsedCv ? (
+            <div className="card">
+              <h3 style={{ fontSize: '1rem', marginBottom: '1rem' }}>Upload CV from PDF</h3>
+              <p className="text-sm text-secondary mb-2">
+                Upload your existing CV in PDF format. The AI will extract and structure all the information automatically.
+              </p>
+              <PdfUploader onParsed={handlePdfParsed} />
+            </div>
+          ) : (
+            <div>
+              <div className="card mb-3">
+                <h3 style={{ fontSize: '1rem', marginBottom: '1rem' }}>Review Parsed CV</h3>
+                <p className="text-sm text-secondary mb-2">
+                  Review the extracted information below. Click Confirm & Save when ready.
+                </p>
+                <div className="adapted-preview">
+                  <ReactMarkdown>{cvToMarkdown(parsedCv)}</ReactMarkdown>
+                </div>
+              </div>
+              {rawText && (
+                <div className="card">
+                  <div className="review-section">
+                    <details className="review-section-open">
+                      <summary className="review-section-title" style={{ listStyle: 'none', padding: '0' }}>
+                        Raw Extracted Text (first 3000 chars)
+                      </summary>
+                      <pre style={{ whiteSpace: 'pre-wrap', fontSize: '0.75rem', marginTop: '0.75rem', color: 'var(--color-text-secondary)' }}>
+                        {rawText}
+                      </pre>
+                    </details>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
         </div>
       )}
     </div>

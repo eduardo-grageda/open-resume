@@ -1,7 +1,11 @@
 from __future__ import annotations
 
+import os
+import tempfile
+
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 
+from backend.config import load_config
 from backend.database import get_storage
 from backend.database import StorageBackend
 from backend.models import BaseCV, ConversationMessage, OnboardingSession
@@ -34,12 +38,48 @@ async def update_cv(body: BaseCV, storage: StorageBackend = Depends(_get_storage
 
 @router.post("/ingest-pdf")
 async def ingest_pdf(file: UploadFile = File(...)):
-    raise HTTPException(status_code=501, detail="PDF ingest not yet implemented")
+    if not file.filename or not file.filename.lower().endswith(".pdf"):
+        raise HTTPException(status_code=400, detail="Only PDF files are accepted")
+
+    config = load_config()
+    if not config.openrouter_api_key:
+        raise HTTPException(status_code=400, detail="AI provider not configured")
+
+    content = await file.read()
+    if len(content) > 10 * 1024 * 1024:
+        raise HTTPException(status_code=400, detail="PDF file too large (max 10MB)")
+
+    suffix = ".pdf"
+    with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as tmp:
+        tmp.write(content)
+        tmp_path = tmp.name
+
+    try:
+        from backend.services.pdf_parser import PdfParser
+
+        parser = PdfParser()
+        pdf_text = parser.extract_text(tmp_path)
+
+        parsed = await parser.parse_to_cv(pdf_text)
+
+        base_cv = parser.parsed_to_base_cv(parsed)
+
+        return {
+            "ok": True,
+            "raw_text": pdf_text[:3000],
+            "parsed_cv": base_cv.model_dump(),
+        }
+    finally:
+        try:
+            os.unlink(tmp_path)
+        except OSError:
+            pass
 
 
 @router.post("/ingest-pdf/confirm")
 async def ingest_pdf_confirm(body: BaseCV, storage: StorageBackend = Depends(_get_storage)):
-    raise HTTPException(status_code=501, detail="PDF ingest confirm not yet implemented")
+    await storage.save_cv(body)
+    return {"ok": True, "cv": body.model_dump()}
 
 
 # ═══════════════════════════════════════════════════════════════

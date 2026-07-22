@@ -1,11 +1,14 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import api from '../api';
+import LoadingSpinner from '../components/LoadingSpinner';
+import PositionCard from '../components/PositionCard';
 
 export default function HomePage() {
   const [cv, setCv] = useState(null);
   const [positions, setPositions] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
 
   useEffect(() => {
     Promise.all([
@@ -15,10 +18,13 @@ export default function HomePage() {
       setCv(cvData.cv);
       setPositions(posData.positions || []);
       setLoading(false);
-    }).catch(() => setLoading(false));
+    }).catch((err) => {
+      setError(err.message);
+      setLoading(false);
+    });
   }, []);
 
-  if (loading) return null;
+  if (loading) return <LoadingSpinner text="Loading dashboard..." />;
 
   const hasCv = cv !== null;
   const personalInfo = cv?.personal_info || {};
@@ -28,6 +34,8 @@ export default function HomePage() {
 
   return (
     <div>
+      {error && <div className="alert alert-error">{error}</div>}
+
       <div className="page-header flex-between">
         <div>
           <h1>Dashboard</h1>
@@ -95,20 +103,7 @@ export default function HomePage() {
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
             {positions.slice(0, 5).map(p => (
-              <Link
-                key={p.id}
-                to={`/positions/${p.id}`}
-                className="card"
-                style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.75rem 1rem', textDecoration: 'none', color: 'inherit' }}
-              >
-                <div>
-                  <span style={{ fontWeight: 600 }}>{p.job_title || 'Untitled'}</span>
-                  <span className="text-sm text-secondary" style={{ marginLeft: '0.5rem' }}>at {p.company_name || 'Unknown'}</span>
-                </div>
-                <span className={`badge badge-${p.status === 'exported' ? 'exported' : p.status === 'tailored' ? 'tailored' : p.status === 'tailoring' ? 'tailoring' : 'new'}`}>
-                  {p.status || 'new'}
-                </span>
-              </Link>
+              <PositionCard key={p.id} position={p} />
             ))}
           </div>
         </div>

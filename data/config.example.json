@@ -1,7 +1,7 @@
 {
   "openrouter_api_key": "",
   "openrouter_base_url": "https://openrouter.ai/api/v1",
-  "openrouter_model": "openai/gpt-4o",
+  "openrouter_model": "deepseek/deepseek-v4-pro",
   "storage_backend": "json",
   "mongo_uri": "mongodb://localhost:27017",
   "search_provider": "serpapi",

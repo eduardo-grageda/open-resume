@@ -3,6 +3,8 @@ import { useParams, useNavigate } from 'react-router-dom';
 import ReactMarkdown from 'react-markdown';
 import api from '../api';
 import MdEditor from '../components/MdEditor';
+import AdaptedPreview from '../components/AdaptedPreview';
+import LoadingSpinner from '../components/LoadingSpinner';
 
 const TABS = ['description', 'tailored', 'export'];
 
@@ -68,7 +70,7 @@ export default function PositionPage() {
     }
   }
 
-  if (loading) return null;
+  if (loading) return <LoadingSpinner text="Loading position..." />;
   if (error && !position && error !== 'Position not found') {
     return (
       <div>
@@ -213,16 +215,12 @@ export default function PositionPage() {
         <div className="card">
           {position.tailored_cv_md ? (
             <div>
-              <div className="form-group">
-                <label>Tailored CV (Markdown)</label>
-                <textarea
-                  value={position.tailored_cv_md}
-                  readOnly
-                  rows={10}
-                  style={{ fontFamily: 'monospace', fontSize: '0.8125rem' }}
-                />
-              </div>
-              <div className="inline-row gap-1">
+              <AdaptedPreview
+                markdown={position.tailored_cv_md}
+                jobTitle={position.job_title}
+                companyName={position.company_name}
+              />
+              <div className="inline-row gap-1 mt-2">
                 <a
                   className="btn btn-primary btn-sm"
                   href={api.exportMarkdownUrl(id)}
@@ -235,25 +233,9 @@ export default function PositionPage() {
                   href={api.exportPdfUrl(id)}
                   download
                   onClick={() => setExporting(true)}
-                  onLoad={() => setExporting(false)}
                 >
                   {exporting ? 'Exporting...' : 'Download PDF'}
                 </a>
-                <button
-                  className="btn btn-secondary btn-sm"
-                  onClick={() => {
-                    const w = window.open('', '_blank');
-                    const html = `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Print - ${position.job_title || 'CV'}</title>
-<style>body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;max-width:800px;margin:2rem auto;padding:0 1rem;line-height:1.6;color:#1a1a1a}
-h1{font-size:1.5rem}h2{font-size:1.25rem;border-bottom:1px solid #ddd;padding-bottom:0.25rem}h3{font-size:1rem}</style></head>
-<body>${position.tailored_cv_md.replace(/\n/g, '<br>')}</body></html>`;
-                    w.document.write(html);
-                    w.document.close();
-                    setTimeout(() => w.print(), 500);
-                  }}
-                >
-                  Print Preview
-                </button>
               </div>
             </div>
           ) : (

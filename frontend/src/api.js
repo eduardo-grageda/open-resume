@@ -35,8 +35,12 @@ export const api = {
   ingestPdf: (file) => {
     const form = new FormData();
     form.append('file', file);
-    return fetch(`${BASE}/cv/ingest-pdf`, { method: 'POST', body: form }).then(r => r.json());
+    return fetch(`${BASE}/cv/ingest-pdf`, { method: 'POST', body: form }).then(r => {
+      if (!r.ok) return r.json().then(d => { throw new Error(d.detail || 'Upload failed'); });
+      return r.json();
+    });
   },
+  ingestPdfConfirm: (cv) => request('POST', '/cv/ingest-pdf/confirm', cv),
 
   // Onboarding
   onboardStart: (body) => request('POST', '/cv/onboard/start', body),
@@ -61,6 +65,7 @@ export const api = {
   searchJobs: (body) => request('POST', '/search/jobs', body),
   getSearchSources: () => request('GET', '/search/sources'),
   extractJd: (body) => request('POST', '/search/extract-jd', body),
+  ingestUrl: (body) => request('POST', '/positions/ingest-url', body),
 };
 
 export default api;

@@ -310,7 +310,7 @@ Stored under `data/positions/<company-slug>/`.
 - If not, the user is redirected to `/settings` to configure:
   - **AI Provider**: OpenRouter (default), OpenAI, or any OpenAI-compatible endpoint.
   - **API Key**: Provider API key (stored locally, never sent anywhere else).
-  - **Model**: Configurable model name (default: `openai/gpt-4o`).
+  - **Model**: Configurable model name (default: `deepseek/deepseek-v4-pro`).
   - **Web Search Provider**: Configurable search API (SerpAPI, Brave Search, etc.).
 - A "Test Connection" button validates the API key before proceeding.
 - Configuration is saved to `data/config.json` (or MongoDB `config` collection).
@@ -630,7 +630,7 @@ volumes:
 |----------|---------|-------------|
 | `OPENROUTER_API_KEY` | — | AI provider API key |
 | `OPENROUTER_BASE_URL` | `https://openrouter.ai/api/v1` | AI provider base URL |
-| `OPENROUTER_MODEL` | `openai/gpt-4o` | Default model |
+| `OPENROUTER_MODEL` | `deepseek/deepseek-v4-pro` | Default model |
 | `STORAGE_BACKEND` | `json` | `json` or `mongodb` |
 | `MONGO_URI` | `mongodb://localhost:27017` | MongoDB connection string |
 | `SEARCH_PROVIDER` | `serpapi` | Web search provider |
@@ -725,7 +725,7 @@ vite>=5.0.0
 
 ## Open Questions & Decisions
 
-1. **Default AI model**: `openai/gpt-4o` via OpenRouter. User can change to any model/provider in Settings.
+1. **Default AI model**: `deepseek/deepseek-v4-pro` via OpenRouter. User can change to any model/provider in Settings.
 2. **Markdown → PDF**: `weasyprint` (no LaTeX, pure Python).
 3. **Web search**: Start with SerpAPI (Google Jobs), add Brave Search as secondary. Abstract behind an interface for easy extension.
 4. **Ports**: Backend `:8000`, frontend `:5173`. Vite proxies `/api` to backend.

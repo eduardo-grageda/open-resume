@@ -518,3 +518,118 @@ input, textarea, select {
 .review-section-body {
   padding: 0 1rem 1rem;
 }
+
+/* Spinner */
+.spinner {
+  width: 32px;
+  height: 32px;
+  border: 3px solid var(--color-border);
+  border-top-color: var(--color-primary);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* Upload Zone */
+.upload-zone {
+  border: 2px dashed var(--color-border);
+  border-radius: var(--radius);
+  padding: 2rem 1rem;
+  text-align: center;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+  background: var(--color-bg);
+}
+
+.upload-zone:hover,
+.upload-zone-active {
+  border-color: var(--color-primary);
+  background: rgba(37, 99, 235, 0.04);
+}
+
+.upload-zone-disabled {
+  cursor: not-allowed;
+  opacity: 0.7;
+}
+
+/* AdaptedPreview */
+.adapted-preview {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  padding: 2rem;
+  font-size: 11pt;
+  line-height: 1.6;
+}
+
+.adapted-preview h1 { font-size: 18pt; margin-bottom: 4pt; }
+.adapted-preview h2 { font-size: 14pt; border-bottom: 1px solid #ddd; padding-bottom: 4pt; margin-top: 16pt; }
+.adapted-preview h3 { font-size: 12pt; }
+.adapted-preview ul, .adapted-preview ol { padding-left: 1.2em; }
+.adapted-preview li { margin-bottom: 2pt; }
+.adapted-preview p { margin-bottom: 4pt; }
+.adapted-preview hr { border: none; border-top: 1px solid #ddd; margin: 16pt 0; }
+
+/* Review Grid (PDF ingest) */
+.review-grid-label {
+  font-size: 0.6875rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--color-text-secondary);
+  margin-bottom: 0.25rem;
+}
+
+/* Print Styles */
+@media print {
+  .sidebar,
+  .btn,
+  .tabs,
+  .page-header p,
+  .alert,
+  .inline-row,
+  .empty-state,
+  .upload-zone,
+  button {
+    display: none !important;
+  }
+
+  .layout {
+    display: block;
+  }
+
+  .main {
+    margin-left: 0 !important;
+    padding: 0 !important;
+    max-width: 100% !important;
+  }
+
+  .card {
+    border: none !important;
+    box-shadow: none !important;
+    padding: 0 !important;
+  }
+
+  .page-header h1 {
+    font-size: 18pt;
+  }
+
+  .adapted-preview {
+    border: none !important;
+    padding: 0 !important;
+  }
+
+  body {
+    font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+    font-size: 11pt;
+    line-height: 1.5;
+    color: #000;
+  }
+
+  h1 { font-size: 18pt; }
+  h2 { font-size: 14pt; }
+  h3 { font-size: 12pt; }
+}

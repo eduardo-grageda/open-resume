@@ -120,6 +120,7 @@ async def onboard_start(
         "completed_sections": result.get("completed_sections", []),
         "total_sections": result.get("total_sections", len(SECTIONS)),
         "extracted_data": session.extracted_data,
+        "retries": result.get("retries", 0),
     }
 
 
@@ -167,6 +168,7 @@ async def onboard_answer(
         "total_sections": result.get("total_sections", len(SECTIONS)),
         "extracted_data": session.extracted_data,
         "conversation_history": [m.model_dump() for m in session.conversation_history],
+        "retries": result.get("retries", 0),
     }
 
 

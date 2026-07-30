@@ -94,7 +94,7 @@ backend/
 - `LLMClient`: wraps `AsyncOpenAI` with configurable base_url
 - `test_connection()` — quick chat call to verify API key
 - `chat()` — full chat completion with system prompt, temperature, max_tokens
-- `chat_json()` — chat with JSON response_format, parses result
+- `chat_json()` — chat with JSON response_format, auto-retries on empty/malformed responses (up to 2 retries, doubles max_tokens on `length` errors), returns `(result, retries)` tuple
 
 **Onboarding (`services/onboarding.py`)**
 - `OnboardingService`: manages onboarding session state machine

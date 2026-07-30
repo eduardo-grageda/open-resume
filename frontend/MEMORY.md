@@ -122,6 +122,7 @@ frontend/
 
 ### OnboardingChat
 - Chat-bubble interface with AI/user role indicators
+- System messages for retry/error notifications (centered, muted, italic)
 - Auto-scroll to bottom on new messages
 - Typing indicator ("AI is thinking...") with animated dots while waiting
 - Text input with Enter-to-send (Shift+Enter for newline)

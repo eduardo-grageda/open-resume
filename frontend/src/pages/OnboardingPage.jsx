@@ -251,9 +251,12 @@ export default function OnboardingPage() {
         target_role: targetRole.trim() || 'professional',
       });
       setSessionId(data.session_id);
-      setMessages([
-        { role: 'assistant', content: data.question },
-      ]);
+      const msgs = [];
+      if (data.retries > 0) {
+        msgs.push({ role: 'system', content: `(Retried ${data.retries} time(s) — LLM needed multiple attempts)` });
+      }
+      msgs.push({ role: 'assistant', content: data.question });
+      setMessages(msgs);
       setCurrentSection(data.section);
       setCompletedSections(data.completed_sections || []);
       setExtractedData(data.extracted_data || {});
@@ -281,9 +284,17 @@ export default function OnboardingPage() {
       setExtractedData(data.extracted_data || {});
       if (data.done) {
         setDone(true);
-        setMessages((prev) => [...prev, { role: 'assistant', content: data.message || 'All sections complete!' }]);
+        setMessages((prev) => [
+          ...prev,
+          ...(data.retries > 0 ? [{ role: 'system', content: `(Retried ${data.retries} time(s) — LLM needed multiple attempts)` }] : []),
+          { role: 'assistant', content: data.message || 'All sections complete!' },
+        ]);
       } else if (data.question) {
-        setMessages((prev) => [...prev, { role: 'assistant', content: data.question }]);
+        setMessages((prev) => [
+          ...prev,
+          ...(data.retries > 0 ? [{ role: 'system', content: `(Retried ${data.retries} time(s) — LLM needed multiple attempts)` }] : []),
+          { role: 'assistant', content: data.question },
+        ]);
       }
     } catch (e) {
       setError(e.message);

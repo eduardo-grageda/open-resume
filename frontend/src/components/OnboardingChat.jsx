@@ -27,10 +27,14 @@ export default function OnboardingChat({ messages, onSend, disabled }) {
     <div className="onboarding-chat">
       <div className="chat-messages">
         {messages.map((msg, i) => (
-          <div key={i} className={`chat-bubble ${msg.role}`}>
-            <div className="chat-role">{msg.role === 'assistant' ? 'AI' : 'You'}</div>
-            <div className="chat-content">{msg.content}</div>
-          </div>
+          msg.role === 'system' ? (
+            <div key={i} className="chat-system-msg">{msg.content}</div>
+          ) : (
+            <div key={i} className={`chat-bubble ${msg.role}`}>
+              <div className="chat-role">{msg.role === 'assistant' ? 'AI' : 'You'}</div>
+              <div className="chat-content">{msg.content}</div>
+            </div>
+          )
         ))}
         {disabled && (
           <div className="chat-bubble assistant">

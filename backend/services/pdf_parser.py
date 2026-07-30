@@ -145,7 +145,7 @@ class PdfParser:
         truncated = self._truncate_text(pdf_text)
 
         try:
-            response = await self._llm.chat_json(
+            response, _retries = await self._llm.chat_json(
                 messages=[{"role": "user", "content": f"Extract structured CV data from this PDF text:\n\n{truncated}"}],
                 system=PDF_PARSE_PROMPT,
                 temperature=0.2,

@@ -213,17 +213,20 @@ class OnboardingService:
         system = self._build_system_prompt(session, first_name, last_name, target_role)
 
         try:
-            response = await self._llm.chat_json(
+            response, retries = await self._llm.chat_json(
                 messages=[{"role": "user", "content": f"Hello! I'm {first_name} {last_name}. Please start the interview."}],
                 system=system,
                 temperature=0.7,
                 max_tokens=2048,
+                max_retries=2,
             )
         except Exception as e:
             logger.error("Failed to start onboarding: %s", e)
             return {"question": f"Error: {e}. Please try again.", "section": session.current_section, "done": False, "error": str(e)}
 
-        return self._process_llm_response(session, response)
+        result = self._process_llm_response(session, response)
+        result["retries"] = retries
+        return result
 
     async def process_answer(self, session: OnboardingSession, answer: str, first_name: str = "", last_name: str = "", target_role: str = "professional") -> dict:
         session.conversation_history.append(ConversationMessage(role="user", content=answer))
@@ -236,17 +239,20 @@ class OnboardingService:
         ]
 
         try:
-            response = await self._llm.chat_json(
+            response, retries = await self._llm.chat_json(
                 messages=messages,
                 system=system,
                 temperature=0.7,
                 max_tokens=2048,
+                max_retries=2,
             )
         except Exception as e:
             logger.error("Failed to process onboarding answer: %s", e)
             return {"question": f"Error: {e}. Please try again.", "section": session.current_section, "done": False, "error": str(e)}
 
-        return self._process_llm_response(session, response)
+        result = self._process_llm_response(session, response)
+        result["retries"] = retries
+        return result
 
     def _process_llm_response(self, session: OnboardingSession, response: Any) -> dict:
         if not isinstance(response, dict):

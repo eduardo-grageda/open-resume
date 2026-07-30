@@ -79,13 +79,44 @@ class LLMClient:
         system: Optional[str] = None,
         temperature: float = 0.3,
         max_tokens: int = 4096,
-    ) -> Any:
+        max_retries: int = 2,
+    ) -> tuple[Any, int]:
         import json
-        text = await self.chat(
-            messages=messages,
-            system=system,
-            temperature=temperature,
-            max_tokens=max_tokens,
-            response_format={"type": "json_object"},
-        )
-        return json.loads(text)
+
+        retries = 0
+        current_max_tokens = max_tokens
+
+        for attempt in range(max_retries + 1):
+            try:
+                text = await self.chat(
+                    messages=messages,
+                    system=system,
+                    temperature=temperature,
+                    max_tokens=current_max_tokens,
+                    response_format={"type": "json_object"},
+                )
+                result = json.loads(text)
+                return result, retries
+            except json.JSONDecodeError as e:
+                retries = attempt + 1
+                logger.warning(
+                    "LLM chat_json JSON parse attempt %d/%d failed: %s",
+                    retries, max_retries + 1, e,
+                )
+                if attempt >= max_retries:
+                    raise RuntimeError(
+                        f"LLM JSON parse failed after {retries} retries: {e}"
+                    ) from e
+            except RuntimeError as e:
+                retries = attempt + 1
+                error_str = str(e)
+                logger.warning(
+                    "LLM chat_json attempt %d/%d failed: %s",
+                    retries, max_retries + 1, error_str,
+                )
+                if "length" in error_str and current_max_tokens < 8192:
+                    current_max_tokens = min(current_max_tokens * 2, 8192)
+                if attempt >= max_retries:
+                    raise
+
+        raise RuntimeError("LLM chat_json failed after all retries")

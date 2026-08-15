@@ -25,6 +25,9 @@ async def get_settings(storage: StorageBackend = Depends(_get_storage)):
     if redacted.get("search_api_key"):
         key = redacted["search_api_key"]
         redacted["search_api_key"] = key[:4] + "****" + key[-4:] if len(key) > 8 else "****"
+    if redacted.get("google_places_api_key"):
+        key = redacted["google_places_api_key"]
+        redacted["google_places_api_key"] = key[:4] + "****" + key[-4:] if len(key) > 8 else "****"
     return {"config": redacted, "has_config": config_file_exists()}
 
 

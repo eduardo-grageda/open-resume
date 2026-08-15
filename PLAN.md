@@ -50,6 +50,9 @@ open-resume/
 │   │   ├── onboarding.py          # AI-guided Q&A engine (state machine)
 │   │   ├── adapter.py             # CV tailoring logic (base CV + JD → adapted CV)
 │   │   └── job_search.py          # Web search aggregator for open positions
+│   │   └── remy/
+│   │       ├── vectordb.py        # Vector DB service (embed + upsert listings/CVs, similarity search)
+│   │       └── places.py          # Google Places API skill (location-based company discovery)
 │   └── requirements.txt
 ├── frontend/
 │   ├── src/
@@ -83,6 +86,10 @@ open-resume/
 │   │       ├── job_description.md     # Original job description
 │   │       └── tailored_cv.md         # Tailored CV for this position
 │   └── exports/                       # Generated PDF files
+│   └── remy/
+│       ├── vectors/                    # ChromaDB / LanceDB persistence (listings + CV embeddings)
+│       ├── checkpoints.sqlite          # LangGraph thread checkpoints
+│       └── memory/                     # Agent semantic memory + CV history
 ├── docker-compose.yml                 # MongoDB + app services
 ├── Dockerfile                         # Container image for the app
 ├── .env.example                       # Environment variables template
@@ -635,6 +642,7 @@ volumes:
 | `MONGO_URI` | `mongodb://localhost:27017` | MongoDB connection string |
 | `SEARCH_PROVIDER` | `serpapi` | Web search provider |
 | `SEARCH_API_KEY` | — | Search API key |
+| `GOOGLE_PLACES_API_KEY` | — | Google Places API key for location-based company discovery |
 | `HOST` | `0.0.0.0` | Listen address |
 | `PORT` | `8000` | Backend port |
 | `FRONTEND_PORT` | `5173` | Frontend dev server port |
@@ -721,22 +729,31 @@ vite>=5.0.0
 - [ ] Print-friendly CSS for PDF export.
 - [ ] README.md with full documentation.
 
+### Phase 8: Remy Topic Suggestions (nice-to-have)
+- [ ] `topic_suggestions.py` service: given the user's CV embedding and the N nearest unmatched listings in vector space, use the LLM to identify recurring skills/technologies the user lacks.
+- [ ] Generate a ranked list of topics to study, with estimated effort, relevance score, and linked example listings.
+- [ ] `/api/remy/suggestions/{query_id}` endpoint.
+- [ ] Frontend: `RemySuggestionsPage` — study roadmap view with progress tracking (user marks topics as "studying" / "learned").
+
 ---
 
 ## Remy — AI Agent (Autonomous Job Hunter)
 
-Remy is an autonomous AI agent integrated into Open Resume. It has **skills** to scrape job platforms (LinkedIn, OCC, and others), persists every search in a **search database**, and runs on user-configured **cronjobs** (daily or weekly only) that execute three task types: **scraping**, **analysis**, and **recommendations**.
+Remy is an autonomous AI agent integrated into Open Resume. It uses **Google Places API** to discover companies and job opportunities near a configurable location, persists every result in a **vector database**, and matches opportunities against the user's vectorized CVs. It runs on user-configured **cronjobs** (daily or weekly only) that execute three task types: **scraping**, **analysis**, and **recommendations**.
 
 ### Overview
 
 - **Agent motor — Deep Agents**: Remy is built on [deepagents](https://github.com/langchain-ai/deepagents) (`create_deep_agent()`), the LangChain/LangGraph agent harness. One **main orchestrator agent** plans, delegates, and reports; it never scrapes or analyzes directly.
 - **Sub-agents (delegation)**: the main agent delegates work to specialized sub-agents with isolated context windows — a *scraper agent*, an *analyst agent*, and a *recommender agent* — each with its own tools, skills, and system prompt.
+- **Location-first discovery**: the scraper uses **Google Places API** to find companies/businesses within a configurable radius of a target city. Location is the primary filter; additional filters (keywords, industry, etc.) narrow results. Initial supported city: **Guadalajara, Mexico**; additional cities can be added by the user.
+- **Vector database**: job opportunities and user CVs are embedded and stored in a **vector database** (local, e.g., ChromaDB or LanceDB). Matching between CVs and opportunities happens in this vector space via cosine similarity.
 - **Memory**: persistent, pluggable memory via LangGraph state + store backends. The agent remembers the user's base CV, **how it changed over time** (CV history snapshots + diffs), user preferences (target roles, locations, salary), and past decisions (accepted/declined recommendations), enabling cross-session recall.
-- **Skills**: pluggable scraper modules — one per platform (LinkedIn, OCC, Computrabajo, Indeed, ...). A common registry makes skills discoverable and individually enable/disableable.
-- **Search database**: every scraped listing is stored, deduplicated by URL, and tracked over time (`first_seen`, `last_seen`, `is_active`). Nothing scraped is thrown away.
+- **Skills**: pluggable scraper modules — Google Places (primary), plus LinkedIn, OCC, Computrabajo, Indeed, and web search aggregation (SerpAPI/Brave) as secondary sources. A common registry makes skills discoverable and individually enable/disableable.
+- **Search database**: every scraped listing is embedded and stored, deduplicated by URL, and tracked over time (`first_seen`, `last_seen`, `is_active`). Nothing scraped is thrown away.
 - **Scheduler**: cronjobs with exactly two frequencies — **daily** (fixed time, every day) and **weekly** (fixed weekday + time). No other schedules. Tasks: `scrape`, `analyze`, `recommend`.
 - **AI analysis**: the analyst sub-agent reviews newly scraped listings against the base CV — market trends, keyword clustering, skills gaps.
-- **Recommendations**: the recommender sub-agent scores listings (0–100) against the base CV and returns top matches with reasons, so the user can import them as Positions.
+- **Recommendations**: the recommender sub-agent scores listings (0–100) against the base CV using vector similarity + LLM reasoning and returns top matches with reasons, so the user can import them as Positions.
+- **Topic suggestions (Phase 8 — nice-to-have)**: based on the nearest opportunities in vector space, Remy suggests topics, technologies, or skills the user could study to close the gap with high-scoring but unmatched listings.
 
 ### Agent Motor: Deep Agents
 
@@ -778,6 +795,7 @@ Memory is bounded: snapshots older than 90 days are kept but summarized; semanti
 
 ### Legal / Polite Scraping Rules
 
+- **Google Places API**: uses the official Google Places API (not scraping). Requires `GOOGLE_PLACES_API_KEY`. Subject to Google's API usage quotas and billing; the `places` skill respects per-request rate limits and caches results.
 - LinkedIn: prefer the public Jobs RSS feed / guest search endpoint. Direct scraping of LinkedIn is against its ToS and heavily rate-limited — the plan treats LinkedIn as a "best-effort, RSS-based" skill and shows a disclaimer in the UI.
 - OCC: parse the public search results pages (`occ.com.mx`) with BeautifulSoup — already a dependency.
 - All skills: respect `robots.txt`, custom User-Agent, configurable delay between requests, per-source rate limits, caching (don't re-fetch listing details we already have).
@@ -791,8 +809,16 @@ Memory is bounded: snapshots older than 90 days are kept but summarized; semanti
   "id": "uuid",
   "name": "string",
   "keywords": ["string"],
-  "locations": ["string"],
-  "sources": ["linkedin", "occ", "computrabajo", "serpapi"],
+  "cities": [
+    {
+      "name": "Guadalajara",
+      "country": "MX",
+      "lat": 20.6597,
+      "lng": -103.3496,
+      "radius_km": 25
+    }
+  ],
+  "sources": ["places", "linkedin", "occ", "computrabajo", "serpapi"],
   "remote_only": false,
   "experience_level": "entry | mid | senior | lead | executive | any",
   "exclude_keywords": ["string"],
@@ -801,12 +827,14 @@ Memory is bounded: snapshots older than 90 days are kept but summarized; semanti
   "updated_at": "ISO8601"
 }
 ```
+- Location is the primary filter: each city entry includes coordinates and a configurable search radius. Default starting city: Guadalajara, Mexico (`lat: 20.6597, lng: -103.3496, radius_km: 25`). Users can add more cities later.
+- `GOOGLE_PLACES_API_KEY` env var or config field required for the `places` source.
 
 **RemyListing** — one scraped job posting (the search database):
 ```json
 {
   "id": "uuid",
-  "source": "linkedin | occ | computrabajo | indeed | serpapi | brave",
+  "source": "places | linkedin | occ | computrabajo | indeed | serpapi | brave",
   "query_id": "uuid (optional — which query found it)",
   "title": "string",
   "company": "string",
@@ -818,6 +846,7 @@ Memory is bounded: snapshots older than 90 days are kept but summarized; semanti
   "first_seen_at": "ISO8601",
   "last_seen_at": "ISO8601",
   "is_active": true,
+  "embedding_id": "string (optional — reference to vector DB entry)",
   "imported_position_id": "uuid (optional — imported into Positions)"
 }
 ```
@@ -872,8 +901,9 @@ Memory is bounded: snapshots older than 90 days are kept but summarized; semanti
 ### Storage Layout
 
 - **JSON mode**: `data/remy/queries.json`, `data/remy/listings.json`, `data/remy/tasks.json`, `data/remy/runs.json`, `data/remy/reports.json`.
+- **Vector store**: `data/remy/vectors/` — local ChromaDB or LanceDB persistence directory for listing and CV embeddings.
 - **Agent state**: `data/remy/checkpoints.sqlite` (LangGraph thread checkpoints) and `data/remy/memory/` (CV history snapshots, deltas, profile, semantic memories).
-- **MongoDB mode**: collections `remy_queries`, `remy_listings` (index on `url`), `remy_tasks`, `remy_runs`, `remy_reports`. Agent checkpoints/memory stay on the local filesystem (JSON store) — they are machine-local, not shared data.
+- **MongoDB mode**: collections `remy_queries`, `remy_listings` (index on `url`), `remy_tasks`, `remy_runs`, `remy_reports`. Agent checkpoints/memory & vector store stay on the local filesystem — they are machine-local, not shared data.
 - `StorageBackend` ABC in `backend/database/__init__.py` gains a `# --- Remy ---` section; both `JsonStore` and `MongoStore` implement it.
 
 ### Scraper Skills Architecture
@@ -882,6 +912,7 @@ Memory is bounded: snapshots older than 90 days are kept but summarized; semanti
 backend/services/remy/
 ├── __init__.py          # skill registry: get_skill(name), available_skills()
 ├── base.py              # ScraperSkill ABC: name, search(query, ...), fetch_detail(url)
+├── places.py            # Google Places API — primary source: discover businesses near location
 ├── linkedin.py          # LinkedIn Jobs RSS / guest search endpoint
 ├── occ.py               # OCC Mundial HTML parser (occ.com.mx)
 ├── computrabajo.py      # Computrabajo HTML parser
@@ -891,11 +922,14 @@ backend/services/remy/
 ├── subagents.py         # scraper / analyst / recommender / cv-chronicler sub-agent builders
 ├── tools.py             # agent tools: listings DB, queries, runs, CV read/write, report store
 ├── memory.py            # CV memory service: snapshots, deltas, profile, semantic memories (LangGraph store)
+├── vectordb.py          # vector database service: embed + upsert listings and CVs, similarity search
 └── prompts.py           # main + sub-agent system prompts
 ```
 
+- `places.py` (Google Places API): given a city + radius, searches for businesses/companies, fetches place details, returns normalized `RemyListing` dicts. Uses Google Places "Text Search" or "Nearby Search" endpoint. Requires `GOOGLE_PLACES_API_KEY` in config.
+- `vectordb.py`: wraps a local vector database (ChromaDB or LanceDB). Embeds listings and CVs using the configured LLM provider's embedding model (or a dedicated one). Provides `upsert_listing()`, `upsert_cv()`, `search_similar(embedding, top_k)` for matchmaking. Data stored under `data/remy/vectors/`.
 - `search()` returns normalized `RemyListing` dicts; `fetch_detail(url)` returns cleaned markdown (reuse the existing `extract_jd` LLM cleaning from `JobSearchService`).
-- Dedup + upsert happens at the service layer, before persistence.
+- Dedup + upsert + embedding happens at the service layer, before persistence.
 - Skills are registered in a dict; enabled sources come from config (`RemyQuery.sources` ∩ enabled skills).
 
 ### Scheduler
@@ -908,8 +942,8 @@ backend/services/remy/
 
 ### AI Analysis & Recommendations
 
-- **Analyze** (analyst sub-agent system prompt): "You are a job-market analyst. Given the base CV (and its recent changes from memory) plus newly scraped listings, produce: market trends, top demanded skills, skills gaps vs the CV, salary range signals, keyword clusters. Never invent data not present in the listings."
-- **Recommend** (recommender sub-agent system prompt): "You are a job-match advisor. Score each listing 0–100 against the base CV, considering skills, experience level, and tools. Return the top N matches (default 10) with score + one-line reason, ordered desc."
+- **Analyze** (analyst sub-agent system prompt): "You are a job-market analyst. Given the base CV (and its recent changes from memory) plus the nearest listings in vector space, produce: market trends, top demanded skills, skills gaps vs the CV, salary range signals, keyword clusters. Never invent data not present in the listings."
+- **Recommend** (recommender sub-agent system prompt): "You are a job-match advisor. Score each listing 0–100 against the base CV, using vector similarity as a first pass then LLM reasoning for nuance. Consider skills, experience level, and tools. Return the top N matches (default 10) with score + one-line reason, ordered desc."
 - Both flows run as sub-agents delegated from the main Remy agent; outputs persist as `RemyReport` and update memory (profile, past recommendations).
 - Deterministic (non-agent) cron paths call the same sub-agent logic via the service layer; both share `prompts.py` so behavior is identical.
 
@@ -930,6 +964,7 @@ backend/services/remy/
 | `POST` | `/analyze/{query_id}` | Run AI analysis now, returns/stores `RemyReport` |
 | `POST` | `/recommend/{query_id}` | Run recommendations now, returns/stores `RemyReport` |
 | `GET` | `/reports/{query_id}` | List stored reports for a query |
+| `GET` | `/suggestions/{query_id}` | Get topic/study suggestions based on nearest unmatched listings in vector space |
 | `POST` | `/chat` | Conversational agent endpoint: send a message, get a streamed agent reply (SSE). The main agent plans + delegates |
 | `GET` | `/chat/{thread_id}` | Resume an agent conversation thread (LangGraph checkpoint) |
 | `GET` | `/memory` | Read agent memory: CV change history, profile, preferences |
@@ -940,23 +975,26 @@ backend/services/remy/
 | Path | Page | Description |
 |------|------|-------------|
 | `/remy` | `RemyPage` | Agent dashboard: enabled skills, next scheduled runs, recent activity, new listings count, latest recommendations |
-| `/remy/queries` | `RemyQueriesPage` | Manage search profiles (keywords, locations, sources, exclusions) |
+| `/remy/queries` | `RemyQueriesPage` | Manage search profiles (keywords, cities + radius, sources, exclusions) |
 | `/remy/tasks` | `RemyTasksPage` | Manage cronjobs: type (scrape/analyze/recommend), **frequency toggle daily/weekly only**, weekday picker (weekly), time picker, enable/disable, "Run now" |
 | `/remy/listings` | `RemyListingsPage` | Search-database browser with filters + "Import to Position" |
 | `/remy/reports` | `RemyReportsPage` | Rendered analysis/recommendation reports with top-match list |
+| `/remy/suggestions` | `RemySuggestionsPage` | Study roadmap: topics to learn, ranked by relevance, with progress tracking |
 
-New components: `RemyTaskForm.jsx` (schedule editor), `ListingCard.jsx`, `RemyNavItem` added to `Layout.jsx` sidebar. Reuses `MdEditor`/`AdaptedPreview` for report rendering.
+New components: `RemyTaskForm.jsx` (schedule editor), `ListingCard.jsx`, `CityRadiusPicker.jsx` (map + radius slider), `SuggestionCard.jsx`, `RemyNavItem` added to `Layout.jsx` sidebar. Reuses `MdEditor`/`AdaptedPreview` for report rendering.
 
 ### Config Additions
 
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `REMY_ENABLED` | `true` | Master switch for the agent (scheduler + routes) |
-| `REMY_SOURCES` | `linkedin,occ,serpapi` | Comma-separated enabled skills |
+| `REMY_SOURCES` | `places,linkedin,occ,serpapi` | Comma-separated enabled skills |
 | `REMY_REQUEST_DELAY` | `2.0` | Seconds between scraper requests (politeness) |
 | `REMY_TZ` | server local | Cron timezone |
 | `REMY_MODEL` | — | Override LLM model for Remy only (defaults to `OPENROUTER_MODEL`) |
+| `REMY_EMBEDDING_MODEL` | — | Embedding model for vector DB (defaults to provider default or `text-embedding-3-small`) |
 | `REMY_MAX_SUBAGENTS` | `3` | Max concurrent sub-agents in a run |
+| `GOOGLE_PLACES_API_KEY` | — | API key for Google Places API (required for `places` source) |
 | `LANGSMITH_TRACING` | `false` | Enable LangSmith tracing for debug |
 
 ### Dependencies to Add
@@ -965,6 +1003,8 @@ New components: `RemyTaskForm.jsx` (schedule editor), `ListingCard.jsx`, `RemyNa
 deepagents>=0.1.0
 langchain-openai>=0.3.0
 apscheduler>=3.10
+chromadb>=0.5.0
+googlemaps>=4.10
 ```
 (`httpx`, `beautifulsoup4` already present; frontend needs nothing new.)
 
@@ -980,3 +1020,7 @@ apscheduler>=3.10
 5. **MongoDB profile**: MongoDB container starts conditionally (Docker Compose profile `mongodb`). Default JSON storage needs no containers.
 6. **No auth**: Local-only tool. If deployed remotely, put it behind a reverse proxy with basic auth.
 7. **License**: MIT.
+8. **Google Places API**: requires a Google Cloud API key with Places API enabled. Billing is per-request; the `places` skill caches results per city+radius+keyword combination to minimize costs. Free tier includes $200/month credit.
+9. **Vector database**: ChromaDB is the default (pure Python, local-first, zero-config). LanceDB is the upgrade path if performance demands it (columnar, disk-based, also pure Python). Both support cosine similarity out of the box.
+10. **Embedding model**: use the configured LLM provider's embedding endpoint if available (e.g., OpenAI `text-embedding-3-small`); fall back to a local model via `sentence-transformers` if the provider doesn't support embeddings or the user wants fully offline operation.
+11. **City search limits**: initially hardcoded to Guadalajara, Mexico. City management (add/remove/rename) is a Phase 2+ feature — the `RemyQuery.cities` array is forward-compatible from day one.

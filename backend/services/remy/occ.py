@@ -46,8 +46,8 @@ class OccSkill(ScraperSkill):
         keyword = " ".join(query.keywords) if query.keywords else "empleos"
         slug = slugify(keyword)
         parts = ["de-" + slug]
-        if query.locations:
-            loc_slug = slugify(query.locations[0])
+        if query.cities:
+            loc_slug = slugify(query.cities[0].name)
             parts.append("en-" + loc_slug)
         return "-".join(parts)
 

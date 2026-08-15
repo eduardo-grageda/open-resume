@@ -19,9 +19,11 @@ DEFAULT_CONFIG = {
     "search_provider": "serpapi",
     "search_api_key": "",
     "remy_enabled": True,
-    "remy_sources": "linkedin,occ,serpapi",
+    "remy_sources": "places,linkedin,occ,serpapi",
     "remy_request_delay": 2.0,
     "remy_tz": "",
+    "remy_embedding_model": "",
+    "google_places_api_key": "",
 }
 
 
@@ -34,9 +36,11 @@ class AppConfig(BaseModel):
     search_provider: str = "serpapi"
     search_api_key: str = ""
     remy_enabled: bool = True
-    remy_sources: str = "linkedin,occ,serpapi"
+    remy_sources: str = "places,linkedin,occ,serpapi"
     remy_request_delay: float = 2.0
     remy_tz: str = ""
+    remy_embedding_model: str = ""
+    google_places_api_key: str = ""
 
 
 def _env_override(config: AppConfig) -> AppConfig:
@@ -66,6 +70,10 @@ def _env_override(config: AppConfig) -> AppConfig:
             pass
     if os.environ.get("REMY_TZ"):
         data["remy_tz"] = os.environ["REMY_TZ"]
+    if os.environ.get("REMY_EMBEDDING_MODEL"):
+        data["remy_embedding_model"] = os.environ["REMY_EMBEDDING_MODEL"]
+    if os.environ.get("GOOGLE_PLACES_API_KEY"):
+        data["google_places_api_key"] = os.environ["GOOGLE_PLACES_API_KEY"]
 
     return AppConfig(**data)
 

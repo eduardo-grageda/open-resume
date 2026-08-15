@@ -72,8 +72,8 @@ class LinkedInSkill(ScraperSkill):
         location = ""
         if query.remote_only:
             location = "Remote"
-        elif query.locations:
-            location = query.locations[0]
+        elif query.cities:
+            location = query.cities[0].name
 
         params = {
             "keywords": " ".join(query.keywords),

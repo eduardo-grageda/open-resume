@@ -155,6 +155,8 @@ class SettingsUpdate(BaseModel):
     remy_sources: Optional[str] = None
     remy_request_delay: Optional[float] = None
     remy_tz: Optional[str] = None
+    remy_embedding_model: Optional[str] = None
+    google_places_api_key: Optional[str] = None
 
 
 class SearchRequest(BaseModel):
@@ -170,11 +172,23 @@ class SearchImportRequest(BaseModel):
     search_result: dict
 
 
+class RemyCity(BaseModel):
+    name: str = "Guadalajara"
+    country: str = "MX"
+    lat: float = 20.6597
+    lng: float = -103.3496
+    radius_km: float = 25.0
+
+
+def _default_cities() -> list[RemyCity]:
+    return [RemyCity()]
+
+
 class RemyQuery(BaseModel):
     id: str = Field(default_factory=_uid)
     name: str = ""
     keywords: list[str] = Field(default_factory=list)
-    locations: list[str] = Field(default_factory=list)
+    cities: list[RemyCity] = Field(default_factory=_default_cities)
     sources: list[str] = Field(default_factory=list)
     remote_only: bool = False
     experience_level: str = "any"
@@ -187,7 +201,7 @@ class RemyQuery(BaseModel):
 class RemyQueryInput(BaseModel):
     name: str = ""
     keywords: list[str] = Field(default_factory=list)
-    locations: list[str] = Field(default_factory=list)
+    cities: list[RemyCity] = Field(default_factory=_default_cities)
     sources: list[str] = Field(default_factory=list)
     remote_only: bool = False
     experience_level: str = "any"
@@ -209,6 +223,7 @@ class RemyListing(BaseModel):
     first_seen_at: str = Field(default_factory=_now)
     last_seen_at: str = Field(default_factory=_now)
     is_active: bool = True
+    embedding_id: str = ""
     imported_position_id: str = ""
 
 

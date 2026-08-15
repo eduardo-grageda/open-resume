@@ -34,7 +34,7 @@ backend/
 
 ### Config (`config.py`)
 - `AppConfig` model: openrouter_api_key, openrouter_base_url, openrouter_model, storage_backend, mongo_uri, search_provider, search_api_key
-- Remy agent fields: remy_enabled (bool, default true), remy_sources ("linkedin,occ,serpapi"), remy_request_delay (2.0), remy_tz ("" = server local)
+- Remy agent fields: remy_enabled (bool, default true), remy_sources ("places,linkedin,occ,serpapi"), remy_request_delay (2.0), remy_tz ("" = server local), remy_embedding_model (""), google_places_api_key ("")
 - Env var overrides for all fields (REMY_ENABLED parsed as bool, REMY_REQUEST_DELAY as float)
 - `load_config()` reads `data/config.json`, falls back to defaults
 - `save_config()` writes to `data/config.json`
@@ -50,8 +50,9 @@ backend/
 - `SearchImportRequest` — import a search result as a position
 - `StarStory` — single STAR story: title, source_company, source_title, situation, task, action, result, interview_pitch, timestamps
 - `StarSession` — STAR prep session state: first_name, last_name, cv_summary, current_phase, current_star_step, achievements, conversation_history, extracted_stories
-- `RemyQuery` (+ `RemyQueryInput`) — saved search profile: name, keywords, locations, sources, remote_only, experience_level, exclude_keywords, enabled
-- `RemyListing` — one scraped job posting: source, query_id, title, company, location, url (dedup key), salary, description_md, posted_date, first_seen_at, last_seen_at, is_active, imported_position_id
+- `RemyCity` — city search target: name, country, lat, lng, radius_km (default Guadalajara, MX, 25 km)
+- `RemyQuery` (+ `RemyQueryInput`) — saved search profile: name, keywords, cities, sources, remote_only, experience_level, exclude_keywords, enabled
+- `RemyListing` — one scraped job posting: source, query_id, title, company, location, url (dedup key), salary, description_md, posted_date, first_seen_at, last_seen_at, is_active, embedding_id, imported_position_id
 - `RemyTask` (+ `RemyTaskInput`) — cronjob: query_id, type (scrape|analyze|recommend), frequency (daily|weekly — validated at model level), day_of_week (0-6, weekly only), time, enabled
 - `RemyRun` — execution record: task_id, trigger (cron|manual), status (running|success|failed|partial), started_at, finished_at, listings_found, new_listings, error, log
 - `RemyReport` — persisted AI output: run_id, query_id, type (analysis|recommendation), content_md, top_matches (`RemyTopMatch`: listing_id, score 0-100, reason)

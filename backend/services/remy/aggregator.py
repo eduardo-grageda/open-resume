@@ -34,7 +34,7 @@ class AggregatorSkill(ScraperSkill):
         service = JobSearchService()
         results = await service.search(
             query=" ".join(query.keywords),
-            location=(query.locations[0] if query.locations else ""),
+            location=(query.cities[0].name if query.cities else ""),
             remote=query.remote_only,
             experience_level=query.experience_level if query.experience_level != "any" else "",
         )

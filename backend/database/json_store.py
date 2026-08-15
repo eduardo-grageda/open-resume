@@ -9,13 +9,30 @@ from typing import Optional
 
 from backend.config import AppConfig, DATA_DIR, load_config, save_config as file_save_config
 from backend.database import StorageBackend
-from backend.models import BaseCV, OnboardingSession, Position, StarSession, StarStory
+from backend.models import (
+    BaseCV,
+    OnboardingSession,
+    Position,
+    RemyListing,
+    RemyQuery,
+    RemyReport,
+    RemyRun,
+    RemyTask,
+    StarSession,
+    StarStory,
+)
 
 POSITIONS_DIR = DATA_DIR / "positions"
 EXPORTS_DIR = DATA_DIR / "exports"
 SESSIONS_DIR = DATA_DIR / "onboarding_sessions"
 STAR_SESSIONS_DIR = DATA_DIR / "star_sessions"
 STAR_STORIES_DIR = DATA_DIR / "star_stories"
+REMY_DIR = DATA_DIR / "remy"
+REMY_QUERIES_PATH = REMY_DIR / "queries.json"
+REMY_LISTINGS_PATH = REMY_DIR / "listings.json"
+REMY_TASKS_PATH = REMY_DIR / "tasks.json"
+REMY_RUNS_PATH = REMY_DIR / "runs.json"
+REMY_REPORTS_PATH = REMY_DIR / "reports.json"
 CV_PATH = DATA_DIR / "base_cv.json"
 
 
@@ -32,6 +49,7 @@ class JsonStore(StorageBackend):
         SESSIONS_DIR.mkdir(parents=True, exist_ok=True)
         STAR_SESSIONS_DIR.mkdir(parents=True, exist_ok=True)
         STAR_STORIES_DIR.mkdir(parents=True, exist_ok=True)
+        REMY_DIR.mkdir(parents=True, exist_ok=True)
 
     # --- Base CV ---
 
@@ -189,3 +207,176 @@ class JsonStore(StorageBackend):
             story_path.unlink()
             return True
         return False
+
+    # --- Remy helpers ---
+
+    @staticmethod
+    def _read_json_list(path: Path, model_cls):
+        if not path.exists():
+            return []
+        with open(path) as f:
+            raw = json.load(f)
+        return [model_cls(**item) for item in raw]
+
+    @staticmethod
+    def _write_json_list(path: Path, items: list) -> None:
+        with open(path, "w") as f:
+            json.dump([item.model_dump() for item in items], f, indent=2, ensure_ascii=False)
+
+    # --- Remy Queries ---
+
+    async def list_remy_queries(self) -> list[RemyQuery]:
+        return self._read_json_list(REMY_QUERIES_PATH, RemyQuery)
+
+    async def get_remy_query(self, query_id: str) -> Optional[RemyQuery]:
+        for q in await self.list_remy_queries():
+            if q.id == query_id:
+                return q
+        return None
+
+    async def save_remy_query(self, query: RemyQuery) -> None:
+        query.updated_at = _now()
+        queries = await self.list_remy_queries()
+        for i, q in enumerate(queries):
+            if q.id == query.id:
+                queries[i] = query
+                break
+        else:
+            queries.append(query)
+        self._write_json_list(REMY_QUERIES_PATH, queries)
+
+    async def delete_remy_query(self, query_id: str) -> bool:
+        queries = await self.list_remy_queries()
+        new_queries = [q for q in queries if q.id != query_id]
+        if len(new_queries) == len(queries):
+            return False
+        self._write_json_list(REMY_QUERIES_PATH, new_queries)
+        return True
+
+    # --- Remy Listings ---
+
+    async def list_remy_listings(
+        self,
+        source: Optional[str] = None,
+        query_id: Optional[str] = None,
+        is_active: Optional[bool] = None,
+        limit: int = 100,
+        offset: int = 0,
+    ) -> list[RemyListing]:
+        listings = self._read_json_list(REMY_LISTINGS_PATH, RemyListing)
+        if source:
+            listings = [l for l in listings if l.source == source]
+        if query_id:
+            listings = [l for l in listings if l.query_id == query_id]
+        if is_active is not None:
+            listings = [l for l in listings if l.is_active == is_active]
+        listings.sort(key=lambda l: l.last_seen_at, reverse=True)
+        return listings[offset:offset + limit]
+
+    async def get_remy_listing(self, listing_id: str) -> Optional[RemyListing]:
+        for l in self._read_json_list(REMY_LISTINGS_PATH, RemyListing):
+            if l.id == listing_id:
+                return l
+        return None
+
+    async def get_remy_listing_by_url(self, url: str) -> Optional[RemyListing]:
+        for l in self._read_json_list(REMY_LISTINGS_PATH, RemyListing):
+            if l.url == url:
+                return l
+        return None
+
+    async def save_remy_listing(self, listing: RemyListing) -> None:
+        listing.last_seen_at = _now()
+        listings = self._read_json_list(REMY_LISTINGS_PATH, RemyListing)
+        for i, l in enumerate(listings):
+            if l.id == listing.id:
+                listings[i] = listing
+                break
+        else:
+            listings.append(listing)
+        self._write_json_list(REMY_LISTINGS_PATH, listings)
+
+    # --- Remy Tasks ---
+
+    async def list_remy_tasks(self) -> list[RemyTask]:
+        return self._read_json_list(REMY_TASKS_PATH, RemyTask)
+
+    async def get_remy_task(self, task_id: str) -> Optional[RemyTask]:
+        for t in await self.list_remy_tasks():
+            if t.id == task_id:
+                return t
+        return None
+
+    async def save_remy_task(self, task: RemyTask) -> None:
+        task.updated_at = _now()
+        tasks = await self.list_remy_tasks()
+        for i, t in enumerate(tasks):
+            if t.id == task.id:
+                tasks[i] = task
+                break
+        else:
+            tasks.append(task)
+        self._write_json_list(REMY_TASKS_PATH, tasks)
+
+    async def delete_remy_task(self, task_id: str) -> bool:
+        tasks = await self.list_remy_tasks()
+        new_tasks = [t for t in tasks if t.id != task_id]
+        if len(new_tasks) == len(tasks):
+            return False
+        self._write_json_list(REMY_TASKS_PATH, new_tasks)
+        return True
+
+    # --- Remy Runs ---
+
+    async def list_remy_runs(
+        self,
+        task_id: Optional[str] = None,
+        limit: int = 50,
+        offset: int = 0,
+    ) -> list[RemyRun]:
+        runs = self._read_json_list(REMY_RUNS_PATH, RemyRun)
+        if task_id:
+            runs = [r for r in runs if r.task_id == task_id]
+        runs.sort(key=lambda r: r.started_at, reverse=True)
+        return runs[offset:offset + limit]
+
+    async def get_remy_run(self, run_id: str) -> Optional[RemyRun]:
+        for r in self._read_json_list(REMY_RUNS_PATH, RemyRun):
+            if r.id == run_id:
+                return r
+        return None
+
+    async def save_remy_run(self, run: RemyRun) -> None:
+        runs = self._read_json_list(REMY_RUNS_PATH, RemyRun)
+        for i, r in enumerate(runs):
+            if r.id == run.id:
+                runs[i] = run
+                break
+        else:
+            runs.append(run)
+        self._write_json_list(REMY_RUNS_PATH, runs)
+
+    # --- Remy Reports ---
+
+    async def list_remy_reports(self, query_id: Optional[str] = None) -> list[RemyReport]:
+        reports = self._read_json_list(REMY_REPORTS_PATH, RemyReport)
+        if query_id:
+            reports = [r for r in reports if r.query_id == query_id]
+        reports.sort(key=lambda r: r.created_at, reverse=True)
+        return reports
+
+    async def get_remy_report(self, report_id: str) -> Optional[RemyReport]:
+        for r in self._read_json_list(REMY_REPORTS_PATH, RemyReport):
+            if r.id == report_id:
+                return r
+        return None
+
+    async def save_remy_report(self, report: RemyReport) -> None:
+        reports = self._read_json_list(REMY_REPORTS_PATH, RemyReport)
+        for i, r in enumerate(reports):
+            if r.id == report.id:
+                reports[i] = report
+                break
+        else:
+            reports.append(report)
+        self._write_json_list(REMY_REPORTS_PATH, reports)

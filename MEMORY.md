@@ -10,11 +10,14 @@
 **Phase 6 (MongoDB & Docker):** Complete  
 **Phase 7 (Polish):** Complete
 
+**Remy Phase 1 (Agent Foundation):** Complete  
+**Remy Phases 2–6:** Not started
+
 ### What exists
 
 - `backend/` — FastAPI app with CORS, health endpoint, config loader, settings routes, CV CRUD routes, positions CRUD routes, LLM client, JSON storage backend, MongoDB storage adapter, Pydantic v2 models, migration script.
 - `frontend/` — React 18 + Vite 5 app with react-router-dom v6, react-markdown v9. Six pages (Home, Settings, CV Editor, Positions list, Position detail), Layout with sidebar nav, MdEditor split-pane component, api.js fetch wrapper. Builds clean. Dockerfile for containerized dev.
-- `data/` — runtime directory (gitignored) for config, CV, positions, exports, onboarding sessions, star sessions, star stories.
+- `data/` — runtime directory (gitignored) for config, CV, positions, exports, onboarding sessions, star sessions, star stories, and Remy agent state (`data/remy/`).
 - `PLAN.md` — full architecture, data models, API routes, implementation phases.
 - `AGENTS.md` — tech stack, commands, conventions, commit format.
 - `Dockerfile` — backend container image (Python 3.10-slim).
@@ -23,12 +26,14 @@
 - `start-docker.sh` — Docker Compose launch with conditional mongo profile.
 - `backend/routes/positions.py` — full CRUD for positions.
 - `backend/migrate.py` — JSON ↔ MongoDB data migration tool.
+- `backend/services/remy/` — Remy agent foundation: `ScraperSkill` ABC (`base.py`) + skill registry (`__init__.py`). No concrete skills yet (Phase 2).
+- `backend/routes/remy.py` — `/api/remy/sources` (skills + enabled state) and `/api/remy/queries` CRUD. Gated by `REMY_ENABLED` config flag.
 
 - `README.md` — comprehensive documentation with quick start, usage guide, and configuration reference.
 
 ### What does NOT exist yet
 
-- **Remy AI Agent** — planned in `PLAN.md` (Remy Phases 1–6): autonomous job scraping, search database, daily/weekly cronjobs, AI analysis & recommendations. Not yet implemented.
+- **Remy AI Agent phases 2–6** — scraper skills (OCC/LinkedIn/aggregator), search database browser, daily/weekly cron scheduler (apscheduler), AI analysis & recommendations, frontend pages, Mongo indexes/politeness polish. Phase 1 foundation is done (models, storage, config, skill registry, queries routes). See `REMY_PHASES.md`.
 - Tests, linting
 
 ### Key decisions

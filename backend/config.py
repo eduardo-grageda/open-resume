@@ -18,6 +18,10 @@ DEFAULT_CONFIG = {
     "mongo_uri": "mongodb://localhost:27017",
     "search_provider": "serpapi",
     "search_api_key": "",
+    "remy_enabled": True,
+    "remy_sources": "linkedin,occ,serpapi",
+    "remy_request_delay": 2.0,
+    "remy_tz": "",
 }
 
 
@@ -29,6 +33,10 @@ class AppConfig(BaseModel):
     mongo_uri: str = "mongodb://localhost:27017"
     search_provider: str = "serpapi"
     search_api_key: str = ""
+    remy_enabled: bool = True
+    remy_sources: str = "linkedin,occ,serpapi"
+    remy_request_delay: float = 2.0
+    remy_tz: str = ""
 
 
 def _env_override(config: AppConfig) -> AppConfig:
@@ -46,6 +54,19 @@ def _env_override(config: AppConfig) -> AppConfig:
         env_val = os.environ.get(env_var)
         if env_val:
             data[field_name] = env_val
+
+    if os.environ.get("REMY_ENABLED"):
+        data["remy_enabled"] = os.environ["REMY_ENABLED"].lower() not in ("0", "false", "no")
+    if os.environ.get("REMY_SOURCES"):
+        data["remy_sources"] = os.environ["REMY_SOURCES"]
+    if os.environ.get("REMY_REQUEST_DELAY"):
+        try:
+            data["remy_request_delay"] = float(os.environ["REMY_REQUEST_DELAY"])
+        except ValueError:
+            pass
+    if os.environ.get("REMY_TZ"):
+        data["remy_tz"] = os.environ["REMY_TZ"]
+
     return AppConfig(**data)
 
 

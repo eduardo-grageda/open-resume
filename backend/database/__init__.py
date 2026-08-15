@@ -4,7 +4,18 @@ from abc import ABC, abstractmethod
 from typing import Optional
 
 from backend.config import AppConfig, load_config
-from backend.models import BaseCV, OnboardingSession, Position, StarSession, StarStory
+from backend.models import (
+    BaseCV,
+    OnboardingSession,
+    Position,
+    RemyListing,
+    RemyQuery,
+    RemyReport,
+    RemyRun,
+    RemyTask,
+    StarSession,
+    StarStory,
+)
 
 
 class StorageBackend(ABC):
@@ -84,6 +95,100 @@ class StorageBackend(ABC):
 
     @abstractmethod
     async def delete_star_story(self, story_id: str) -> bool:
+        ...
+
+    # --- Remy Queries ---
+
+    @abstractmethod
+    async def list_remy_queries(self) -> list[RemyQuery]:
+        ...
+
+    @abstractmethod
+    async def get_remy_query(self, query_id: str) -> Optional[RemyQuery]:
+        ...
+
+    @abstractmethod
+    async def save_remy_query(self, query: RemyQuery) -> None:
+        ...
+
+    @abstractmethod
+    async def delete_remy_query(self, query_id: str) -> bool:
+        ...
+
+    # --- Remy Listings ---
+
+    @abstractmethod
+    async def list_remy_listings(
+        self,
+        source: Optional[str] = None,
+        query_id: Optional[str] = None,
+        is_active: Optional[bool] = None,
+        limit: int = 100,
+        offset: int = 0,
+    ) -> list[RemyListing]:
+        ...
+
+    @abstractmethod
+    async def get_remy_listing(self, listing_id: str) -> Optional[RemyListing]:
+        ...
+
+    @abstractmethod
+    async def get_remy_listing_by_url(self, url: str) -> Optional[RemyListing]:
+        ...
+
+    @abstractmethod
+    async def save_remy_listing(self, listing: RemyListing) -> None:
+        ...
+
+    # --- Remy Tasks ---
+
+    @abstractmethod
+    async def list_remy_tasks(self) -> list[RemyTask]:
+        ...
+
+    @abstractmethod
+    async def get_remy_task(self, task_id: str) -> Optional[RemyTask]:
+        ...
+
+    @abstractmethod
+    async def save_remy_task(self, task: RemyTask) -> None:
+        ...
+
+    @abstractmethod
+    async def delete_remy_task(self, task_id: str) -> bool:
+        ...
+
+    # --- Remy Runs ---
+
+    @abstractmethod
+    async def list_remy_runs(
+        self,
+        task_id: Optional[str] = None,
+        limit: int = 50,
+        offset: int = 0,
+    ) -> list[RemyRun]:
+        ...
+
+    @abstractmethod
+    async def get_remy_run(self, run_id: str) -> Optional[RemyRun]:
+        ...
+
+    @abstractmethod
+    async def save_remy_run(self, run: RemyRun) -> None:
+        ...
+
+    # --- Remy Reports ---
+
+    @abstractmethod
+    async def list_remy_reports(self, query_id: Optional[str] = None) -> list[RemyReport]:
+        ...
+
+    @abstractmethod
+    async def get_remy_report(self, report_id: str) -> Optional[RemyReport]:
+        ...
+
+    @abstractmethod
+    async def save_remy_report(self, report: RemyReport) -> None:
         ...
 
 

@@ -17,13 +17,15 @@ backend/
 │   ├── cv.py            # GET/PUT /api/cv, POST onboarding (start/answer/confirm/progress), ingest-pdf stubs
 │   ├── positions.py     # CRUD /api/positions, adapt, export md/pdf
 │   ├── search.py        # POST /api/search/jobs, GET /api/search/sources, POST /api/search/extract-jd
-│   └── star.py          # POST /api/star/start, /answer, /confirm, GET/PUT/DELETE /api/star/stories
+│   ├── star.py          # POST /api/star/start, /answer, /confirm, GET/PUT/DELETE /api/star/stories
+│   └── remy.py          # GET /api/remy/sources, CRUD /api/remy/queries
 ├── services/
 │   ├── llm.py            # LLMClient wrapping openai SDK (AsyncOpenAI)
 │   ├── onboarding.py     # OnboardingService: session state machine, prompt templates, answer processing, extracted→BaseCV conversion
 │   ├── adapter.py        # AdapterService: CV tailoring via LLM, prompt construction, response parsing
 │   ├── job_search.py     # JobSearchService: SerpAPI + Brave Search, JD extraction via LLM
 │   ├── star.py           # StarService: STAR interview prep, achievement identification, S/T/A/R Q&A, pitch generation
+│   ├── remy/             # Remy agent: base.py (ScraperSkill ABC), __init__.py (skill registry)
 │   └── __init__.py
 └── requirements.txt
 ```
@@ -32,7 +34,8 @@ backend/
 
 ### Config (`config.py`)
 - `AppConfig` model: openrouter_api_key, openrouter_base_url, openrouter_model, storage_backend, mongo_uri, search_provider, search_api_key
-- Env var overrides for all fields
+- Remy agent fields: remy_enabled (bool, default true), remy_sources ("linkedin,occ,serpapi"), remy_request_delay (2.0), remy_tz ("" = server local)
+- Env var overrides for all fields (REMY_ENABLED parsed as bool, REMY_REQUEST_DELAY as float)
 - `load_config()` reads `data/config.json`, falls back to defaults
 - `save_config()` writes to `data/config.json`
 
@@ -47,11 +50,17 @@ backend/
 - `SearchImportRequest` — import a search result as a position
 - `StarStory` — single STAR story: title, source_company, source_title, situation, task, action, result, interview_pitch, timestamps
 - `StarSession` — STAR prep session state: first_name, last_name, cv_summary, current_phase, current_star_step, achievements, conversation_history, extracted_stories
+- `RemyQuery` (+ `RemyQueryInput`) — saved search profile: name, keywords, locations, sources, remote_only, experience_level, exclude_keywords, enabled
+- `RemyListing` — one scraped job posting: source, query_id, title, company, location, url (dedup key), salary, description_md, posted_date, first_seen_at, last_seen_at, is_active, imported_position_id
+- `RemyTask` (+ `RemyTaskInput`) — cronjob: query_id, type (scrape|analyze|recommend), frequency (daily|weekly — validated at model level), day_of_week (0-6, weekly only), time, enabled
+- `RemyRun` — execution record: task_id, trigger (cron|manual), status (running|success|failed|partial), started_at, finished_at, listings_found, new_listings, error, log
+- `RemyReport` — persisted AI output: run_id, query_id, type (analysis|recommendation), content_md, top_matches (`RemyTopMatch`: listing_id, score 0-100, reason)
 
 ### Storage (`database/`)
 - `StorageBackend` ABC: get_cv, save_cv, get_config, save_config, list_positions, get_position, save_position, delete_position, get/save/delete onboarding sessions, get/save/delete star sessions, list/get/save/delete star stories
-- `JsonStore` — full implementation using `data/` directory
-- `MongoStore` — full implementation using pymongo AsyncMongoClient with lazy connection
+- Remy section: list/get/save/delete remy queries & tasks; list/get/get_by_url/save remy listings (filter by source, query_id, is_active, limit/offset); list/get/save remy runs (filter by task_id); list/get/save remy reports (filter by query_id)
+- `JsonStore` — full implementation; Remy data as JSON files under `data/remy/` (queries.json, listings.json, tasks.json, runs.json, reports.json)
+- `MongoStore` — full implementation using pymongo AsyncMongoClient with lazy connection; Remy collections `remy_queries`, `remy_listings`, `remy_tasks`, `remy_runs`, `remy_reports`
 - `get_storage()` factory — returns JsonStore or MongoStore based on config
 
 ### Migration (`migrate.py`)
@@ -102,6 +111,15 @@ backend/
 - `DELETE /api/star/stories/{id}` — delete a story
 - `POST /api/star/generate-pitch/{id}` — generate polished interview pitch for a single story
 
+**Remy (`routes/remy.py`)**
+- `GET /api/remy/sources` — list enabled (config) + implemented (registry) scraper skills
+- `GET /api/remy/queries` — list search profiles
+- `POST /api/remy/queries` — create from `RemyQueryInput`
+- `GET /api/remy/queries/{id}` — single query
+- `PUT /api/remy/queries/{id}` — update (preserves id/created_at)
+- `DELETE /api/remy/queries/{id}` — delete
+- All routes return 404 when `REMY_ENABLED=false`
+
 ### Services
 
 **LLM (`services/llm.py`)**
@@ -149,10 +167,16 @@ backend/
 - `generate_pitches()` — generates polished 2-minute interview pitches from completed STAR stories
 - `_merge_stories()` — merges extracted story data across LLM responses, keeping longest field values
 
+**Remy skills (`services/remy/`)**
+- `base.py` — `ScraperSkill` ABC: class attrs `name`/`display_name`/`description`, abstract `search(query, limit)` → normalized listing dicts, `fetch_detail(url)` → cleaned markdown
+- `__init__.py` — skill registry: `register` decorator, `get_skill(name)`, `available_skills()`, `enabled_sources(config)` (parses REMY_SOURCES)
+- No concrete skills registered yet (Phase 2: occ, linkedin, aggregator)
+
 ### Main (`main.py`)
 - FastAPI app with CORS (localhost:5173)
-- Registers settings, cv, positions, search routers
+- Registers settings, cv, positions, search, star, remy routers
 - `GET /api/health` — status, has_cv, storage backend info
 
 ### Not Yet Implemented
-- (none — all phases complete)
+- Remy Phase 2–6: scraper skills (OCC, LinkedIn, aggregator), listings routes, cron scheduler (apscheduler), AI analysis/recommendations, frontend — see `REMY_PHASES.md` and root `MEMORY.md`
+- Tests, linting

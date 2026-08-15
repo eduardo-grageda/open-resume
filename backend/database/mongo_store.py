@@ -4,7 +4,18 @@ from typing import Optional
 
 from backend.config import AppConfig
 from backend.database import StorageBackend
-from backend.models import BaseCV, OnboardingSession, Position, StarSession, StarStory
+from backend.models import (
+    BaseCV,
+    OnboardingSession,
+    Position,
+    RemyListing,
+    RemyQuery,
+    RemyReport,
+    RemyRun,
+    RemyTask,
+    StarSession,
+    StarStory,
+)
 
 
 class MongoStore(StorageBackend):
@@ -160,6 +171,167 @@ class MongoStore(StorageBackend):
         col = await self._collection("star_stories")
         result = await col.delete_one({"id": story_id})
         return result.deleted_count > 0
+
+    # --- Remy Queries ---
+
+    async def list_remy_queries(self) -> list[RemyQuery]:
+        col = await self._collection("remy_queries")
+        cursor = col.find({})
+        results: list[RemyQuery] = []
+        async for doc in cursor:
+            doc.pop("_id", None)
+            results.append(RemyQuery(**doc))
+        return results
+
+    async def get_remy_query(self, query_id: str) -> Optional[RemyQuery]:
+        col = await self._collection("remy_queries")
+        doc = await col.find_one({"id": query_id})
+        if doc is None:
+            return None
+        doc.pop("_id", None)
+        return RemyQuery(**doc)
+
+    async def save_remy_query(self, query: RemyQuery) -> None:
+        col = await self._collection("remy_queries")
+        query.updated_at = _now()
+        await col.replace_one({"id": query.id}, query.model_dump(), upsert=True)
+
+    async def delete_remy_query(self, query_id: str) -> bool:
+        col = await self._collection("remy_queries")
+        result = await col.delete_one({"id": query_id})
+        return result.deleted_count > 0
+
+    # --- Remy Listings ---
+
+    async def list_remy_listings(
+        self,
+        source: Optional[str] = None,
+        query_id: Optional[str] = None,
+        is_active: Optional[bool] = None,
+        limit: int = 100,
+        offset: int = 0,
+    ) -> list[RemyListing]:
+        col = await self._collection("remy_listings")
+        query: dict = {}
+        if source:
+            query["source"] = source
+        if query_id:
+            query["query_id"] = query_id
+        if is_active is not None:
+            query["is_active"] = is_active
+        cursor = col.find(query).sort("last_seen_at", -1).skip(offset).limit(limit)
+        results: list[RemyListing] = []
+        async for doc in cursor:
+            doc.pop("_id", None)
+            results.append(RemyListing(**doc))
+        return results
+
+    async def get_remy_listing(self, listing_id: str) -> Optional[RemyListing]:
+        col = await self._collection("remy_listings")
+        doc = await col.find_one({"id": listing_id})
+        if doc is None:
+            return None
+        doc.pop("_id", None)
+        return RemyListing(**doc)
+
+    async def get_remy_listing_by_url(self, url: str) -> Optional[RemyListing]:
+        col = await self._collection("remy_listings")
+        doc = await col.find_one({"url": url})
+        if doc is None:
+            return None
+        doc.pop("_id", None)
+        return RemyListing(**doc)
+
+    async def save_remy_listing(self, listing: RemyListing) -> None:
+        col = await self._collection("remy_listings")
+        listing.last_seen_at = _now()
+        await col.replace_one({"id": listing.id}, listing.model_dump(), upsert=True)
+
+    # --- Remy Tasks ---
+
+    async def list_remy_tasks(self) -> list[RemyTask]:
+        col = await self._collection("remy_tasks")
+        cursor = col.find({})
+        results: list[RemyTask] = []
+        async for doc in cursor:
+            doc.pop("_id", None)
+            results.append(RemyTask(**doc))
+        return results
+
+    async def get_remy_task(self, task_id: str) -> Optional[RemyTask]:
+        col = await self._collection("remy_tasks")
+        doc = await col.find_one({"id": task_id})
+        if doc is None:
+            return None
+        doc.pop("_id", None)
+        return RemyTask(**doc)
+
+    async def save_remy_task(self, task: RemyTask) -> None:
+        col = await self._collection("remy_tasks")
+        task.updated_at = _now()
+        await col.replace_one({"id": task.id}, task.model_dump(), upsert=True)
+
+    async def delete_remy_task(self, task_id: str) -> bool:
+        col = await self._collection("remy_tasks")
+        result = await col.delete_one({"id": task_id})
+        return result.deleted_count > 0
+
+    # --- Remy Runs ---
+
+    async def list_remy_runs(
+        self,
+        task_id: Optional[str] = None,
+        limit: int = 50,
+        offset: int = 0,
+    ) -> list[RemyRun]:
+        col = await self._collection("remy_runs")
+        query: dict = {}
+        if task_id:
+            query["task_id"] = task_id
+        cursor = col.find(query).sort("started_at", -1).skip(offset).limit(limit)
+        results: list[RemyRun] = []
+        async for doc in cursor:
+            doc.pop("_id", None)
+            results.append(RemyRun(**doc))
+        return results
+
+    async def get_remy_run(self, run_id: str) -> Optional[RemyRun]:
+        col = await self._collection("remy_runs")
+        doc = await col.find_one({"id": run_id})
+        if doc is None:
+            return None
+        doc.pop("_id", None)
+        return RemyRun(**doc)
+
+    async def save_remy_run(self, run: RemyRun) -> None:
+        col = await self._collection("remy_runs")
+        await col.replace_one({"id": run.id}, run.model_dump(), upsert=True)
+
+    # --- Remy Reports ---
+
+    async def list_remy_reports(self, query_id: Optional[str] = None) -> list[RemyReport]:
+        col = await self._collection("remy_reports")
+        query: dict = {}
+        if query_id:
+            query["query_id"] = query_id
+        cursor = col.find(query).sort("created_at", -1)
+        results: list[RemyReport] = []
+        async for doc in cursor:
+            doc.pop("_id", None)
+            results.append(RemyReport(**doc))
+        return results
+
+    async def get_remy_report(self, report_id: str) -> Optional[RemyReport]:
+        col = await self._collection("remy_reports")
+        doc = await col.find_one({"id": report_id})
+        if doc is None:
+            return None
+        doc.pop("_id", None)
+        return RemyReport(**doc)
+
+    async def save_remy_report(self, report: RemyReport) -> None:
+        col = await self._collection("remy_reports")
+        await col.replace_one({"id": report.id}, report.model_dump(), upsert=True)
 
 
 def _now() -> str:

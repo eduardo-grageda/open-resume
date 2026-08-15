@@ -151,6 +151,10 @@ class SettingsUpdate(BaseModel):
     mongo_uri: Optional[str] = None
     search_provider: Optional[str] = None
     search_api_key: Optional[str] = None
+    remy_enabled: Optional[bool] = None
+    remy_sources: Optional[str] = None
+    remy_request_delay: Optional[float] = None
+    remy_tz: Optional[str] = None
 
 
 class SearchRequest(BaseModel):
@@ -164,6 +168,108 @@ class SearchRequest(BaseModel):
 
 class SearchImportRequest(BaseModel):
     search_result: dict
+
+
+class RemyQuery(BaseModel):
+    id: str = Field(default_factory=_uid)
+    name: str = ""
+    keywords: list[str] = Field(default_factory=list)
+    locations: list[str] = Field(default_factory=list)
+    sources: list[str] = Field(default_factory=list)
+    remote_only: bool = False
+    experience_level: str = "any"
+    exclude_keywords: list[str] = Field(default_factory=list)
+    enabled: bool = True
+    created_at: str = Field(default_factory=_now)
+    updated_at: str = Field(default_factory=_now)
+
+
+class RemyQueryInput(BaseModel):
+    name: str = ""
+    keywords: list[str] = Field(default_factory=list)
+    locations: list[str] = Field(default_factory=list)
+    sources: list[str] = Field(default_factory=list)
+    remote_only: bool = False
+    experience_level: str = "any"
+    exclude_keywords: list[str] = Field(default_factory=list)
+    enabled: bool = True
+
+
+class RemyListing(BaseModel):
+    id: str = Field(default_factory=_uid)
+    source: str = ""
+    query_id: str = ""
+    title: str = ""
+    company: str = ""
+    location: str = ""
+    url: str = ""
+    salary: str = ""
+    description_md: str = ""
+    posted_date: str = ""
+    first_seen_at: str = Field(default_factory=_now)
+    last_seen_at: str = Field(default_factory=_now)
+    is_active: bool = True
+    imported_position_id: str = ""
+
+
+class RemyTask(BaseModel):
+    id: str = Field(default_factory=_uid)
+    query_id: str = ""
+    type: str = "scrape"
+    frequency: str = "daily"
+    day_of_week: int = 0
+    time: str = "09:00"
+    enabled: bool = True
+    created_at: str = Field(default_factory=_now)
+    updated_at: str = Field(default_factory=_now)
+
+    @model_validator(mode="after")
+    def _validate_frequency(self) -> "RemyTask":
+        if self.frequency not in ("daily", "weekly"):
+            raise ValueError("frequency must be 'daily' or 'weekly'")
+        if self.type not in ("scrape", "analyze", "recommend"):
+            raise ValueError("type must be 'scrape', 'analyze', or 'recommend'")
+        if self.frequency == "weekly" and (self.day_of_week < 0 or self.day_of_week > 6):
+            raise ValueError("day_of_week must be 0-6 for weekly tasks")
+        return self
+
+
+class RemyTaskInput(BaseModel):
+    query_id: str = ""
+    type: str = "scrape"
+    frequency: str = "daily"
+    day_of_week: int = 0
+    time: str = "09:00"
+    enabled: bool = True
+
+
+class RemyRun(BaseModel):
+    id: str = Field(default_factory=_uid)
+    task_id: str = ""
+    trigger: str = "manual"
+    status: str = "running"
+    started_at: str = Field(default_factory=_now)
+    finished_at: str = ""
+    listings_found: int = 0
+    new_listings: int = 0
+    error: str = ""
+    log: str = ""
+
+
+class RemyTopMatch(BaseModel):
+    listing_id: str = ""
+    score: int = 0
+    reason: str = ""
+
+
+class RemyReport(BaseModel):
+    id: str = Field(default_factory=_uid)
+    run_id: str = ""
+    query_id: str = ""
+    type: str = "analysis"
+    content_md: str = ""
+    top_matches: list[RemyTopMatch] = Field(default_factory=list)
+    created_at: str = Field(default_factory=_now)
 
 
 class StarStory(BaseModel):

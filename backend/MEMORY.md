@@ -168,9 +168,14 @@ backend/
 - `_merge_stories()` — merges extracted story data across LLM responses, keeping longest field values
 
 **Remy skills (`services/remy/`)**
-- `base.py` — `ScraperSkill` ABC: class attrs `name`/`display_name`/`description`, abstract `search(query, limit)` → normalized listing dicts, `fetch_detail(url)` → cleaned markdown
-- `__init__.py` — skill registry: `register` decorator, `get_skill(name)`, `available_skills()`, `enabled_sources(config)` (parses REMY_SOURCES)
-- No concrete skills registered yet (Phase 2: occ, linkedin, aggregator)
+- `base.py` — `ScraperSkill` ABC: class attrs `name`/`display_name`/`description`/`aliases`/`tos_notice`, abstract `search(query, limit)` → normalized listing dicts, `fetch_detail(url)` → cleaned markdown
+- `__init__.py` — skill registry: `register` decorator, `get_skill(name)`, `available_skills()`, `skill_info()`, `enabled_sources(config)` (parses REMY_SOURCES). Built-in skills lazy-loaded via `_ensure_loaded()`.
+- `utils.py` — shared helpers: `fetch_text()` (httpx with headers), `html_to_markdown()` (bs4 deterministic converter), `polite_sleep()` (respects `REMY_REQUEST_DELAY`), `normalize_url()` (strip tracking params for dedup), `url_is_blocked()` (robots.txt cache), `slugify()`.
+- `aggregator.py` — `AggregatorSkill`: wraps `JobSearchService` (SerpAPI/Brave). Registered under name `aggregator` with aliases `serpapi`/`brave`. `fetch_detail()` delegates to LLM-based JD extractor (if configured) falling back to HTML→MD.
+- `linkedin.py` — `LinkedInSkill`: guest jobs API (`jobs-guest/jobs/api/seeMoreJobPostings/search` for cards, `jobs-guest/jobs/api/jobPosting/{id}` for detail). Includes `tos_notice` disclaimer. Parses `div.base-card` cards.
+- `occ.py` — `OccSkill`: OCC Mundial HTML parser (occ.com.mx). Search URL: `/empleos/de-{keyword}/`. Parses `div.card-job-offer[data-id]` cards. Detail behind Cloudflare — best-effort with graceful fallback.
+- `scraper.py` — `ScraperService.run_query()`: resolve enabled skills for a query, run each skill, dedup by URL (normalize_url → `get_remy_listing_by_url`), upsert listings, mark stale listings inactive per (query, source). `ScrapeResult`/`ScrapeStats` dataclasses.
+- `POST /api/remy/queries/{id}/scrape` — manual trigger: executes scraper, persists `RemyRun` with stats.
 
 ### Main (`main.py`)
 - FastAPI app with CORS (localhost:5173)
@@ -178,5 +183,5 @@ backend/
 - `GET /api/health` — status, has_cv, storage backend info
 
 ### Not Yet Implemented
-- Remy Phase 2–6: scraper skills (OCC, LinkedIn, aggregator), listings routes, cron scheduler (apscheduler), AI analysis/recommendations, frontend — see `REMY_PHASES.md` and root `MEMORY.md`
+- Remy Phase 3–6: cron scheduler (apscheduler), task CRUD routes, AI analysis/recommendations (LangGraph deepagents), chat endpoint, memory module, frontend — see `REMY_PHASES.md` and root `MEMORY.md`
 - Tests, linting

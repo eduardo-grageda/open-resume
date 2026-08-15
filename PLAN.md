@@ -729,11 +729,52 @@ Remy is an autonomous AI agent integrated into Open Resume. It has **skills** to
 
 ### Overview
 
+- **Agent motor — Deep Agents**: Remy is built on [deepagents](https://github.com/langchain-ai/deepagents) (`create_deep_agent()`), the LangChain/LangGraph agent harness. One **main orchestrator agent** plans, delegates, and reports; it never scrapes or analyzes directly.
+- **Sub-agents (delegation)**: the main agent delegates work to specialized sub-agents with isolated context windows — a *scraper agent*, an *analyst agent*, and a *recommender agent* — each with its own tools, skills, and system prompt.
+- **Memory**: persistent, pluggable memory via LangGraph state + store backends. The agent remembers the user's base CV, **how it changed over time** (CV history snapshots + diffs), user preferences (target roles, locations, salary), and past decisions (accepted/declined recommendations), enabling cross-session recall.
 - **Skills**: pluggable scraper modules — one per platform (LinkedIn, OCC, Computrabajo, Indeed, ...). A common registry makes skills discoverable and individually enable/disableable.
 - **Search database**: every scraped listing is stored, deduplicated by URL, and tracked over time (`first_seen`, `last_seen`, `is_active`). Nothing scraped is thrown away.
 - **Scheduler**: cronjobs with exactly two frequencies — **daily** (fixed time, every day) and **weekly** (fixed weekday + time). No other schedules. Tasks: `scrape`, `analyze`, `recommend`.
-- **AI analysis**: the LLM reviews newly scraped listings against the base CV — market trends, keyword clustering, skills gaps.
-- **Recommendations**: the LLM scores listings (0–100) against the base CV and returns top matches with reasons, so the user can import them as Positions.
+- **AI analysis**: the analyst sub-agent reviews newly scraped listings against the base CV — market trends, keyword clustering, skills gaps.
+- **Recommendations**: the recommender sub-agent scores listings (0–100) against the base CV and returns top matches with reasons, so the user can import them as Positions.
+
+### Agent Motor: Deep Agents
+
+- **Harness**: `deepagents.create_deep_agent()` — batteries-included planning loop, filesystem tools, context management (thread summarization, tool output offloading), skills, and sub-agents, running on LangGraph.
+- **Model**: model-agnostic; any tool-calling LLM works. We bridge the existing `services/llm.py` config (OpenRouter / OpenAI-compatible `base_url`) to a LangChain chat model (`langchain-openai` with `ChatOpenAI(base_url=..., api_key=...)`), so the provider configured in Settings is reused unchanged. `REMY_MODEL` config allows a dedicated model for the agent if desired.
+- **Human-in-the-loop**: LangGraph interrupts on destructive/expensive actions (importing a listing as a Position, regenerating the CV, launching a scrape outside schedule) so the user must approve before execution.
+- **Persistence**: a LangGraph checkpointer (SQLite-backed, `data/remy/checkpoints.sqlite`) persists agent thread state across restarts; a pluggable store (JSON-backed `LangGraph` `BaseStore`, `data/remy/memory/`) powers long-term memory.
+- **Tracing (optional)**: LangSmith can be enabled via env vars for debugging — off by default, no telemetry otherwise.
+
+### Sub-Agents (Task Delegation)
+
+The main Remy agent delegates via deepagents' built-in `task` tool (sub-agents with isolated contexts). Each sub-agent gets only the tools it needs:
+
+| Sub-agent | Tools | Responsibility |
+|-----------|-------|----------------|
+| `scraper` | Scraper skills (LinkedIn/OCC/...), listings DB read/write | Execute a `scrape` task: run enabled skills for a query, normalize + dedup + upsert listings, report counts |
+| `analyst` | Listings DB read, base CV read, memory read/write | Execute an `analyze` task: market trends, keyword clusters, skills gaps vs the CV |
+| `recommender` | Listings DB read, base CV read, positions read/write | Execute a `recommend` task: score listings 0–100, top-N with reasons, optionally draft Position imports |
+| `cv-chronicler` | Base CV read, memory write | On every CV change: snapshot the CV, diff against previous version, summarize what changed and why into memory |
+
+- The main agent handles **planning, tool orchestration, and reporting**; sub-agents handle execution. Sub-agent results are summarized back into the main context (deepagents context management keeps the main window small).
+- Delegation is optional per task: cron tasks still call the deterministic service layer directly (no LLM roundtrip needed to scrape); the agent path is used for interactive conversations and for `analyze`/`recommend` generation.
+- **No invented experience**: all sub-agent system prompts carry the same factual-accuracy rule as the adapter — never invent skills, roles, or accomplishments not present in the base CV.
+
+### Memory
+
+Remy's memory has two layers, both persisted locally under `data/remy/memory/`:
+
+1. **CV memory (the user profile over time)**:
+   - `cv_history/` — a snapshot of the base CV (`BaseCV` JSON) taken on every save; `cv_history.index.json` lists snapshots with timestamps and one-line change summaries.
+   - `cv_deltas.jsonl` — per-change diffs (what was added/removed/modified) generated by `cv-chronicler`.
+   - `profile.json` — derived long-term facts: current role and seniority, skill evolution timeline (skills gained/retired, with dates), target roles, location preferences, salary expectations, language proficiency.
+   - Every `analyze`/`recommend` run reads the **latest CV + recent deltas**, so skills gaps and matches reflect what changed recently ("you added Kubernetes 3 weeks ago → these 5 new listings match").
+2. **Conversation & decision memory**:
+   - `memories/` — namespace-scoped semantic memories via the LangGraph JSON store: user preferences, feedback on past reports ("too long", "ignore recruiting agencies"), accepted/declined recommendations, and adapt decisions (what was emphasized per position and why).
+   - Memory is read into the main agent's system prompt (recent + relevant entries) and updated after each run.
+
+Memory is bounded: snapshots older than 90 days are kept but summarized; semantic memories are trimmed to the N most relevant per namespace to control context size.
 
 ### Legal / Polite Scraping Rules
 
@@ -831,7 +872,8 @@ Remy is an autonomous AI agent integrated into Open Resume. It has **skills** to
 ### Storage Layout
 
 - **JSON mode**: `data/remy/queries.json`, `data/remy/listings.json`, `data/remy/tasks.json`, `data/remy/runs.json`, `data/remy/reports.json`.
-- **MongoDB mode**: collections `remy_queries`, `remy_listings` (index on `url`), `remy_tasks`, `remy_runs`, `remy_reports`.
+- **Agent state**: `data/remy/checkpoints.sqlite` (LangGraph thread checkpoints) and `data/remy/memory/` (CV history snapshots, deltas, profile, semantic memories).
+- **MongoDB mode**: collections `remy_queries`, `remy_listings` (index on `url`), `remy_tasks`, `remy_runs`, `remy_reports`. Agent checkpoints/memory stay on the local filesystem (JSON store) — they are machine-local, not shared data.
 - `StorageBackend` ABC in `backend/database/__init__.py` gains a `# --- Remy ---` section; both `JsonStore` and `MongoStore` implement it.
 
 ### Scraper Skills Architecture
@@ -844,7 +886,12 @@ backend/services/remy/
 ├── occ.py               # OCC Mundial HTML parser (occ.com.mx)
 ├── computrabajo.py      # Computrabajo HTML parser
 ├── indeed.py            # (best-effort) Indeed HTML/RSS parser
-└── aggregator.py        # wraps existing JobSearchService (SerpAPI/Brave) as a skill
+├── aggregator.py        # wraps existing JobSearchService (SerpAPI/Brave) as a skill
+├── agent.py             # create_remy_agent(): deepagents harness, main orchestrator agent
+├── subagents.py         # scraper / analyst / recommender / cv-chronicler sub-agent builders
+├── tools.py             # agent tools: listings DB, queries, runs, CV read/write, report store
+├── memory.py            # CV memory service: snapshots, deltas, profile, semantic memories (LangGraph store)
+└── prompts.py           # main + sub-agent system prompts
 ```
 
 - `search()` returns normalized `RemyListing` dicts; `fetch_detail(url)` returns cleaned markdown (reuse the existing `extract_jd` LLM cleaning from `JobSearchService`).
@@ -861,9 +908,10 @@ backend/services/remy/
 
 ### AI Analysis & Recommendations
 
-- **Analyze** (system prompt): "You are a job-market analyst. Given the base CV and newly scraped listings, produce: market trends, top demanded skills, skills gaps vs the CV, salary range signals, keyword clusters. Never invent data not present in the listings."
-- **Recommend** (system prompt): "You are a job-match advisor. Score each listing 0–100 against the base CV, considering skills, experience level, and tools. Return the top N matches (default 10) with score + one-line reason, ordered desc."
-- Both flows reuse `services/llm.py`; outputs persist as `RemyReport`.
+- **Analyze** (analyst sub-agent system prompt): "You are a job-market analyst. Given the base CV (and its recent changes from memory) plus newly scraped listings, produce: market trends, top demanded skills, skills gaps vs the CV, salary range signals, keyword clusters. Never invent data not present in the listings."
+- **Recommend** (recommender sub-agent system prompt): "You are a job-match advisor. Score each listing 0–100 against the base CV, considering skills, experience level, and tools. Return the top N matches (default 10) with score + one-line reason, ordered desc."
+- Both flows run as sub-agents delegated from the main Remy agent; outputs persist as `RemyReport` and update memory (profile, past recommendations).
+- Deterministic (non-agent) cron paths call the same sub-agent logic via the service layer; both share `prompts.py` so behavior is identical.
 
 ### API Routes (`backend/routes/remy.py`, prefix `/api/remy`)
 
@@ -882,6 +930,10 @@ backend/services/remy/
 | `POST` | `/analyze/{query_id}` | Run AI analysis now, returns/stores `RemyReport` |
 | `POST` | `/recommend/{query_id}` | Run recommendations now, returns/stores `RemyReport` |
 | `GET` | `/reports/{query_id}` | List stored reports for a query |
+| `POST` | `/chat` | Conversational agent endpoint: send a message, get a streamed agent reply (SSE). The main agent plans + delegates |
+| `GET` | `/chat/{thread_id}` | Resume an agent conversation thread (LangGraph checkpoint) |
+| `GET` | `/memory` | Read agent memory: CV change history, profile, preferences |
+| `DELETE` | `/memory` | Clear agent memory (fresh start) |
 
 ### Frontend
 
@@ -903,13 +955,18 @@ New components: `RemyTaskForm.jsx` (schedule editor), `ListingCard.jsx`, `RemyNa
 | `REMY_SOURCES` | `linkedin,occ,serpapi` | Comma-separated enabled skills |
 | `REMY_REQUEST_DELAY` | `2.0` | Seconds between scraper requests (politeness) |
 | `REMY_TZ` | server local | Cron timezone |
+| `REMY_MODEL` | — | Override LLM model for Remy only (defaults to `OPENROUTER_MODEL`) |
+| `REMY_MAX_SUBAGENTS` | `3` | Max concurrent sub-agents in a run |
+| `LANGSMITH_TRACING` | `false` | Enable LangSmith tracing for debug |
 
 ### Dependencies to Add
 
 ```
+deepagents>=0.1.0
+langchain-openai>=0.3.0
 apscheduler>=3.10
 ```
-(httpx + beautifulsoup4 already present; frontend needs nothing new.)
+(`httpx`, `beautifulsoup4` already present; frontend needs nothing new.)
 
 
 ---

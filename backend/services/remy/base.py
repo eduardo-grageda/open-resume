@@ -20,6 +20,8 @@ class ScraperSkill(ABC):
     name: str = ""
     display_name: str = ""
     description: str = ""
+    aliases: tuple[str, ...] = ()
+    tos_notice: str = ""
 
     @abstractmethod
     async def search(self, query: RemyQuery, limit: int = 20) -> list[dict[str, Any]]:

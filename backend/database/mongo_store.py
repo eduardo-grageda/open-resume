@@ -208,9 +208,13 @@ class MongoStore(StorageBackend):
         source: Optional[str] = None,
         query_id: Optional[str] = None,
         is_active: Optional[bool] = None,
+        search: Optional[str] = None,
+        new_only: bool = False,
         limit: int = 100,
         offset: int = 0,
     ) -> list[RemyListing]:
+        from datetime import datetime, timedelta
+
         col = await self._collection("remy_listings")
         query: dict = {}
         if source:
@@ -219,6 +223,14 @@ class MongoStore(StorageBackend):
             query["query_id"] = query_id
         if is_active is not None:
             query["is_active"] = is_active
+        if search:
+            pattern = {"$regex": search, "$options": "i"}
+            query["$or"] = [{"title": pattern}, {"company": pattern}]
+        if new_only:
+            query["is_active"] = True
+            query["first_seen_at"] = {
+                "$gte": (datetime.utcnow() - timedelta(days=7)).isoformat() + "Z"
+            }
         cursor = col.find(query).sort("last_seen_at", -1).skip(offset).limit(limit)
         results: list[RemyListing] = []
         async for doc in cursor:

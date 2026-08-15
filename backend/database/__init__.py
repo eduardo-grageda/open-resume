@@ -123,6 +123,8 @@ class StorageBackend(ABC):
         source: Optional[str] = None,
         query_id: Optional[str] = None,
         is_active: Optional[bool] = None,
+        search: Optional[str] = None,
+        new_only: bool = False,
         limit: int = 100,
         offset: int = 0,
     ) -> list[RemyListing]:

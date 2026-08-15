@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 import os
 import shutil
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Optional
 
@@ -260,6 +260,8 @@ class JsonStore(StorageBackend):
         source: Optional[str] = None,
         query_id: Optional[str] = None,
         is_active: Optional[bool] = None,
+        search: Optional[str] = None,
+        new_only: bool = False,
         limit: int = 100,
         offset: int = 0,
     ) -> list[RemyListing]:
@@ -270,6 +272,12 @@ class JsonStore(StorageBackend):
             listings = [l for l in listings if l.query_id == query_id]
         if is_active is not None:
             listings = [l for l in listings if l.is_active == is_active]
+        if search:
+            q = search.lower()
+            listings = [l for l in listings if q in l.title.lower() or q in l.company.lower()]
+        if new_only:
+            cutoff = (datetime.utcnow() - timedelta(days=7)).isoformat() + "Z"
+            listings = [l for l in listings if l.is_active and l.first_seen_at >= cutoff]
         listings.sort(key=lambda l: l.last_seen_at, reverse=True)
         return listings[offset:offset + limit]
 

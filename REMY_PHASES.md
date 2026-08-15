@@ -37,11 +37,11 @@
 - [x] `/api/remy/tasks/{id}/run` manual trigger + `/api/remy/runs` history.
 
 ### Remy Phase 4: AI Analysis & Recommendations
-- [ ] Wire `analyst` sub-agent → `RemyAnalyzer` service: market-trend + skills-gap report from nearest listings in vector space vs base CV (prompt from `prompts.py`).
-- [ ] Wire `recommender` sub-agent → `RemyRecommender` service: two-pass scoring — (1) vector similarity as first pass to narrow candidates, (2) LLM reasoning for nuanced 0–100 match scoring. Returns top-N with reasons.
-- [ ] `RemyReport` persistence + `/api/remy/analyze/{query_id}`, `/api/remy/recommend/{query_id}`, `/api/remy/reports/{query_id}`.
-- [ ] Wire analyze/recommend as schedulable task types.
-- [ ] Memory update after each run: store report ID, top matches, user feedback. Update profile with new market signals.
+- [x] Wire `analyst` sub-agent → `RemyAnalyzer` service: market-trend + skills-gap report from nearest listings in vector space vs base CV (prompt from `prompts.py`).
+- [x] Wire `recommender` sub-agent → `RemyRecommender` service: two-pass scoring — (1) vector similarity as first pass to narrow candidates, (2) LLM reasoning for nuanced 0–100 match scoring. Returns top-N with reasons.
+- [x] `RemyReport` persistence + `/api/remy/analyze/{query_id}`, `/api/remy/recommend/{query_id}`, `/api/remy/reports/{query_id}`.
+- [x] Wire analyze/recommend as schedulable task types.
+- [x] Memory update after each run: store report ID, top matches, user feedback. Update profile with new market signals.
 
 ### Remy Phase 5: Frontend
 - [ ] `RemyPage` dashboard with schedule status + recent activity + Remy chat panel (conversational agent interface, SSE streaming).
@@ -93,7 +93,7 @@
 6. **Sub-agent parallelism**: deepagents tasks run sequentially by default; `REMY_MAX_SUBAGENTS` can be raised to run independent tasks in parallel (e.g., scrape LinkedIn + OCC simultaneously). Start conservative, benchmark before raising.
 7. **Memory store backend**: start with the in-process JSON store (LangGraph `BaseStore` backed by `data/remy/memory/`). Upgrade path to Postgres/SQLite `AsyncPostgresStore` / `AsyncSqliteStore` from `langgraph` if performance demands it. The CV snapshot + delta mechanism is custom code alongside the LangGraph store; they can be unified later.
 8. **Google Places API**: requires a Google Cloud API key with Places API enabled. Billing is per-request; the `places` skill caches results per city+radius+keyword combination to minimize costs. Free tier includes $200/month credit. The "Nearby Search" endpoint is used for radius-based discovery; "Text Search" for keyword refinement.
-9. **Vector database**: ChromaDB is the default (pure Python, local-first, zero-config, persistent on disk). LanceDB is the upgrade path if performance demands it (columnar, disk-based, also pure Python). Both support cosine similarity. Data stored under `data/remy/vectors/`.
+9. **Vector database**: Phase 4 ships a dependency-free JSON-backed `VectorStore` (`vectordb.py`, data under `data/remy/vectors/`) with pure-Python cosine search — no ChromaDB install required (ChromaDB on Python 3.13 is risky). Provider embeddings are used when `REMY_EMBEDDING_MODEL` is configured (via `LLMClient.embed()`), otherwise a deterministic local feature-hashing embedder (dim 512). ChromaDB remains the swap-in upgrade path (same upsert/search interface).
 10. **Embedding model**: use the configured LLM provider's embedding endpoint if available (e.g., OpenAI `text-embedding-3-small` via OpenRouter or direct). Fall back to a local `sentence-transformers` model if the provider doesn't support embeddings or the user wants fully offline operation. Configurable via `REMY_EMBEDDING_MODEL`.
 11. **City search limits**: initially hardcoded to Guadalajara, Mexico. City management (add/remove/rename, set per-city radius) is implemented in Phase 2 backend + Phase 5 frontend. The `RemyQuery.cities` array is forward-compatible from day one — multiple cities can be defined even if the UI isn't ready yet.
 12. **Topic suggestions model**: the gap-analysis prompt asks the LLM to identify skills that appear in ≥N nearest unmatched listings but are absent from the CV. The LLM ranks them by frequency × relevance and estimates study effort. Suggestions are always user-reviewed — nothing is added to the CV automatically.

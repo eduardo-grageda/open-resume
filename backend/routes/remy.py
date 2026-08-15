@@ -192,6 +192,78 @@ async def get_listing(
     return {"listing": listing.model_dump(), "refreshed": refreshed}
 
 
+# ── Analysis & Recommendations (Phase 4) ─────────────────────────────────────
+
+
+async def _prepare_query_run(query_id: str, storage: StorageBackend):
+    query = await storage.get_remy_query(query_id)
+    if query is None:
+        raise HTTPException(status_code=404, detail="Query not found")
+    run = RemyRun(task_id="", trigger="manual", status="running")
+    await storage.save_remy_run(run)
+    return query, run
+
+
+async def _run_analysis_route(storage: StorageBackend, query, run: RemyRun):
+    from backend.services.remy.analyzer import run_analysis
+
+    return await run_analysis(storage, query, run)
+
+
+async def _run_recommendation_route(storage: StorageBackend, query, run: RemyRun):
+    from backend.services.remy.recommender import run_recommendation
+
+    return await run_recommendation(storage, query, run)
+
+
+@router.post("/analyze/{query_id}")
+async def analyze_query(query_id: str, storage: StorageBackend = Depends(_get_storage)):
+    _require_remy_enabled()
+    query, run = await _prepare_query_run(query_id, storage)
+    if not query.enabled:
+        raise HTTPException(status_code=400, detail="Query is disabled")
+
+    run, report = await _run_analysis_route(storage, query, run)
+    if run.status == "failed":
+        raise HTTPException(status_code=502, detail=run.error)
+    return {"run": run.model_dump(), "report": report.model_dump() if report else None}
+
+
+@router.post("/recommend/{query_id}")
+async def recommend_query(query_id: str, storage: StorageBackend = Depends(_get_storage)):
+    _require_remy_enabled()
+    query, run = await _prepare_query_run(query_id, storage)
+    if not query.enabled:
+        raise HTTPException(status_code=400, detail="Query is disabled")
+
+    run, report = await _run_recommendation_route(storage, query, run)
+    if run.status == "failed":
+        raise HTTPException(status_code=502, detail=run.error)
+    return {"run": run.model_dump(), "report": report.model_dump() if report else None}
+
+
+@router.get("/reports")
+async def list_reports(
+    query_id: Optional[str] = None,
+    limit: int = 50,
+    offset: int = 0,
+    storage: StorageBackend = Depends(_get_storage),
+):
+    _require_remy_enabled()
+    limit = max(1, min(limit, 200))
+    reports = await storage.list_remy_reports(query_id=query_id)
+    return {"reports": [r.model_dump() for r in reports[offset:offset + limit]], "total": len(reports)}
+
+
+@router.get("/reports/{report_id}")
+async def get_report(report_id: str, storage: StorageBackend = Depends(_get_storage)):
+    _require_remy_enabled()
+    report = await storage.get_remy_report(report_id)
+    if report is None:
+        raise HTTPException(status_code=404, detail="Report not found")
+    return {"report": report.model_dump()}
+
+
 # ── Tasks ────────────────────────────────────────────────────────────────────
 
 

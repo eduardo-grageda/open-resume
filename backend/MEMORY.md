@@ -25,7 +25,9 @@ backend/
 │   ├── adapter.py        # AdapterService: CV tailoring via LLM, prompt construction, response parsing
 │   ├── job_search.py     # JobSearchService: SerpAPI + Brave Search, JD extraction via LLM
 │   ├── star.py           # StarService: STAR interview prep, achievement identification, S/T/A/R Q&A, pitch generation
-│   ├── remy/             # Remy agent: base.py (ScraperSkill ABC), __init__.py (skill registry)
+│   ├── remy/             # Remy agent: base.py (ScraperSkill ABC), __init__.py (skill registry),
+│   │                     #   utils.py, occ.py, linkedin.py, aggregator.py, scraper.py, scheduler.py,
+│   │                     #   vectordb.py, prompts.py, analyzer.py, recommender.py, subagents.py, memory.py
 │   └── __init__.py
 └── requirements.txt
 ```
@@ -127,6 +129,10 @@ backend/
 - `POST /api/remy/tasks/{id}/run` — manual trigger, returns persisted `RemyRun`
 - `GET /api/remy/runs` — run history (`?task_id=`, `?limit=`, `?offset=`, newest first)
 - `GET /api/remy/runs/{id}` — single run
+- `POST /api/remy/analyze/{query_id}` — run market analysis, returns `{run, report}` (502 on failure)
+- `POST /api/remy/recommend/{query_id}` — run recommendations, returns `{run, report}` (502 on failure)
+- `GET /api/remy/reports` — report history (`?query_id=`, `?limit=`, `?offset=`, newest first)
+- `GET /api/remy/reports/{id}` — single report
 - All routes return 404 when `REMY_ENABLED=false`
 
 ### Services
@@ -136,6 +142,7 @@ backend/
 - `test_connection()` — quick chat call to verify API key
 - `chat()` — full chat completion with system prompt, temperature, max_tokens
 - `chat_json()` — chat with JSON response_format, auto-retries on empty/malformed responses (up to 2 retries, doubles max_tokens on `length` errors), returns `(result, retries)` tuple
+- `embed(texts, model)` — embeddings via OpenAI-compatible endpoint (used by Remy vectordb when `REMY_EMBEDDING_MODEL` is set)
 
 **Onboarding (`services/onboarding.py`)**
 - `OnboardingService`: manages onboarding session state machine
@@ -185,7 +192,13 @@ backend/
 - `occ.py` — `OccSkill`: OCC Mundial HTML parser (occ.com.mx). Search URL: `/empleos/de-{keyword}/`. Parses `div.card-job-offer[data-id]` cards. Detail behind Cloudflare — best-effort with graceful fallback.
 - `scraper.py` — `ScraperService.run_query()`: resolve enabled skills for a query, run each skill, dedup by URL (normalize_url → `get_remy_listing_by_url`), upsert listings, mark stale listings inactive per (query, source). `ScrapeResult`/`ScrapeStats` dataclasses.
 - `POST /api/remy/queries/{id}/scrape` — manual trigger: executes scraper, persists `RemyRun` with stats.
-- `scheduler.py` — `RemyScheduler`: APScheduler `AsyncIOScheduler` (daily/weekly cron only). `start()` loads persisted enabled tasks from storage and registers jobs; `stop()` on shutdown; `sync_task(task)` add/update/remove one job (used by task routes); `run_now(task_id)` manual execution; `reload()` syncs all jobs with storage. Jobs: `max_instances=1`, `coalesce=True`, 1h misfire grace. Timezone from `REMY_TZ` (ZoneInfo) or server-local. `_execute_task()` persists `RemyRun` (running → success/partial/failed) with listings counts + per-source log; analyze/recommend task types record a graceful "not implemented (Phase 4)" failure. Wired to FastAPI lifespan in `main.py` when `REMY_ENABLED`.
+- `scheduler.py` — `RemyScheduler`: APScheduler `AsyncIOScheduler` (daily/weekly cron only). `start()` loads persisted enabled tasks from storage and registers jobs; `stop()` on shutdown; `sync_task(task)` add/update/remove one job (used by task routes); `run_now(task_id)` manual execution; `reload()` syncs all jobs with storage. Jobs: `max_instances=1`, `coalesce=True`, 1h misfire grace. Timezone from `REMY_TZ` (ZoneInfo) or server-local. `_execute_task()` persists `RemyRun` (running → success/partial/failed) with listings counts + per-source log; dispatches all three task types: `scrape` → `run_query()`, `analyze` → `analyzer.run_analysis()`, `recommend` → `recommender.run_recommendation()`. Wired to FastAPI lifespan in `main.py` when `REMY_ENABLED`.
+- `vectordb.py` — vector search backend (Phase 2/4): `Embedder` (provider embeddings via `LLMClient.embed()` when `REMY_EMBEDDING_MODEL` + API key set, otherwise deterministic dependency-free local feature-hashing embedder, dim 512), `VectorStore` (JSON-persisted under `data/remy/vectors/vectors.json`; `upsert`/`get`/`delete`/`search` with pure-Python cosine similarity), helpers `listing_text()`, `cv_text()` (reuses `AdapterService._format_cv`), `ensure_listing_embedded()`, `get_cv_vector()` (cached per `cv.updated_at`). Swap-in point for ChromaDB later.
+- `prompts.py` — analyst + recommender system prompts (JSON schemas, "never invent experience" rule) and message builders (`build_analyst_messages`, `build_recommender_messages`).
+- `analyzer.py` — `RemyAnalyzer`: market-trend + skills-gap report. Embeds active query listings, gets CV vector, selects 15 nearest in vector space (falls back to query keywords vector if no CV), LLM JSON → `content_md` + `top_skills`; vector-only fallback report when LLM unavailable. `run_analysis(storage, query, run)` helper updates the `RemyRun` and records memory. Returns `AnalysisResult(report, listings_considered, top_skills)`.
+- `recommender.py` — `RemyRecommender`: two-pass scoring — pass 1 vector similarity narrows to top 20 candidates, pass 2 LLM scores 0-100 with one-sentence reasons (fallback: relative vector scores). Returns `RecommendationResult(report, listings_considered)`; `run_recommendation(storage, query, run)` helper updates the `RemyRun` + memory.
+- `subagents.py` — sub-agent registry (`SUBAGENTS`: `analyst`, `recommender` specs with handler functions), `get_subagent(name)`, `run_subagent(name, query, storage)` dispatch — the entry point future deepagents `task` tools will call.
+- `memory.py` — `RemyMemory` (singleton via `get_remy_memory()`): JSON under `data/remy/memory/` — `profile.json` (role, skills_timeline, preferences, `market_signals.top_skills` merged after analysis runs) and `runs_index.json` (last 200 runs: run_id, report_id, report_type, query_id, top_listing_ids). `record_run()`, `update_market_signals()`, `list_recent_runs()`, `clear()`. CV snapshot/delta history lands with `cv-chronicler` in the agent phase.
 
 ### Main (`main.py`)
 - FastAPI app with CORS (localhost:5173)
@@ -193,5 +206,5 @@ backend/
 - `GET /api/health` — status, has_cv, storage backend info
 
 ### Not Yet Implemented
-- Remy Phase 4–6: AI analysis/recommendations (LangGraph deepagents), chat endpoint, memory module, frontend — see `REMY_PHASES.md` and root `MEMORY.md`
+- Remy Phase 5–7: frontend pages, chat endpoint (deepagents), import-as-position, Mongo unique indexes/politeness polish, topic suggestions — see `REMY_PHASES.md` and root `MEMORY.md`
 - Tests, linting

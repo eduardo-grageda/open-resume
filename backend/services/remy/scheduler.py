@@ -51,14 +51,6 @@ async def _execute_task(task_id: str, trigger: str) -> RemyRun:
         await storage.save_remy_run(run)
         return run
 
-    if task.type != "scrape":
-        run.status = "failed"
-        run.error = f"Task type '{task.type}' is not implemented yet (Phase 4)"
-        run.finished_at = _now()
-        await storage.save_remy_run(run)
-        logger.warning("Task %s skipped: %s", task_id, run.error)
-        return run
-
     query = await storage.get_remy_query(task.query_id)
     if query is None:
         run.status = "failed"
@@ -73,33 +65,50 @@ async def _execute_task(task_id: str, trigger: str) -> RemyRun:
         await storage.save_remy_run(run)
         return run
 
-    try:
+    if task.type == "scrape":
         from backend.services.remy.scraper import run_query
 
-        result = await run_query(query, storage)
-    except Exception as e:
-        logger.exception("Task %s execution failed", task_id)
-        run.status = "failed"
-        run.error = str(e)
+        try:
+            result = await run_query(query, storage)
+        except Exception as e:
+            logger.exception("Task %s execution failed", task_id)
+            run.status = "failed"
+            run.error = str(e)
+            run.finished_at = _now()
+            await storage.save_remy_run(run)
+            return run
+
+        run.listings_found = result.listings_found
+        run.new_listings = result.new_listings
+        run.status = "partial" if result.errors else "success"
+        run.error = "; ".join(result.errors)
+        run.log = "\n".join(
+            f"{s.source}: found={s.found} new={s.new} updated={s.updated}"
+            + (f" error={s.error}" if s.error else "")
+            for s in result.by_source
+        )
         run.finished_at = _now()
         await storage.save_remy_run(run)
+        logger.info(
+            "Task %s finished: %s (%d found, %d new)",
+            task_id, run.status, run.listings_found, run.new_listings,
+        )
         return run
 
-    run.listings_found = result.listings_found
-    run.new_listings = result.new_listings
-    run.status = "partial" if result.errors else "success"
-    run.error = "; ".join(result.errors)
-    run.log = "\n".join(
-        f"{s.source}: found={s.found} new={s.new} updated={s.updated}"
-        + (f" error={s.error}" if s.error else "")
-        for s in result.by_source
-    )
+    if task.type == "analyze":
+        from backend.services.remy.analyzer import run_analysis
+
+        return (await run_analysis(storage, query, run))[0]
+
+    if task.type == "recommend":
+        from backend.services.remy.recommender import run_recommendation
+
+        return (await run_recommendation(storage, query, run))[0]
+
+    run.status = "failed"
+    run.error = f"Unknown task type '{task.type}'"
     run.finished_at = _now()
     await storage.save_remy_run(run)
-    logger.info(
-        "Task %s finished: %s (%d found, %d new)",
-        task_id, run.status, run.listings_found, run.new_listings,
-    )
     return run
 
 

@@ -28,6 +28,16 @@ class LLMClient:
     def model(self) -> str:
         return self._config.openrouter_model
 
+    async def embed(
+        self, texts: list[str], model: Optional[str] = None
+    ) -> list[list[float]]:
+        """Embed texts via the OpenAI-compatible embeddings endpoint."""
+        response = await self.client.embeddings.create(
+            model=model or self.model,
+            input=texts,
+        )
+        return [item.embedding for item in response.data]
+
     async def test_connection(self) -> tuple[bool, str]:
         try:
             response = await self.client.chat.completions.create(

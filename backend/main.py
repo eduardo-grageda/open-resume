@@ -27,7 +27,21 @@ async def lifespan(app: FastAPI):
         logger.info("Storage backend: %s", config.storage_backend)
     except Exception as e:
         logger.warning("Could not load config: %s", e)
+
+    if load_config().remy_enabled:
+        try:
+            from backend.services.remy.scheduler import get_scheduler
+            await get_scheduler().start()
+        except Exception as e:
+            logger.warning("Could not start Remy scheduler: %s", e)
+
     yield
+
+    try:
+        from backend.services.remy.scheduler import get_scheduler
+        get_scheduler().stop()
+    except Exception:
+        pass
     logger.info("Shutting down Open Resume backend")
 
 

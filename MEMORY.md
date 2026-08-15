@@ -12,7 +12,8 @@
 
 **Remy Phase 1 (Agent Foundation):** Complete  
 **Remy Phase 2 (Scraper Skills & Search Database):** Complete  
-**Remy Phases 3–6:** Not started
+**Remy Phase 3 (Cronjobs):** Complete  
+**Remy Phases 4–7:** Not started
 
 ### What exists
 
@@ -27,14 +28,14 @@
 - `start-docker.sh` — Docker Compose launch with conditional mongo profile.
 - `backend/routes/positions.py` — full CRUD for positions.
 - `backend/migrate.py` — JSON ↔ MongoDB data migration tool.
-- `backend/services/remy/` — Remy agent: `ScraperSkill` ABC (`base.py`), skill registry with alias support (`__init__.py`), shared utils (`utils.py` — fetch helper, HTML→MD, polite delay, robots.txt), three concrete skills (`aggregator.py`, `linkedin.py` with ToS disclaimer, `occ.py`), scraper service (`scraper.py` — dedup, upsert, stale-marking).
-- `backend/routes/remy.py` — `/api/remy/sources` (skills + enabled state) and `/api/remy/queries` CRUD. Gated by `REMY_ENABLED` config flag.
+- `backend/services/remy/` — Remy agent: `ScraperSkill` ABC (`base.py`), skill registry with alias support (`__init__.py`), shared utils (`utils.py` — fetch helper, HTML→MD, polite delay, robots.txt), three concrete skills (`aggregator.py`, `linkedin.py` with ToS disclaimer, `occ.py`), scraper service (`scraper.py` — dedup, upsert, stale-marking), cron scheduler (`scheduler.py` — APScheduler daily/weekly jobs, run persistence, load-on-boot).
+- `backend/routes/remy.py` — `/api/remy/sources` (skills + enabled state), `/api/remy/queries` CRUD, `/api/remy/tasks` CRUD with scheduler sync, `/api/remy/tasks/{id}/run` manual trigger, `/api/remy/runs` history. Gated by `REMY_ENABLED` config flag.
 
 - `README.md` — comprehensive documentation with quick start, usage guide, and configuration reference.
 
 ### What does NOT exist yet
 
-- **Remy AI Agent phases 3–6** — daily/weekly cron scheduler (apscheduler), AI analysis & recommendations (LangGraph deepagents), frontend pages, Mongo indexes/politeness polish. Phases 1–2 are done. See `REMY_PHASES.md`.
+- **Remy AI Agent phases 4–7** — AI analysis & recommendations (LangGraph deepagents), frontend pages, Mongo indexes/politeness polish, topic suggestions. Phases 1–3 are done. See `REMY_PHASES.md`.
 - Tests, linting
 
 ### Key decisions

@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException
 
 from backend.config import load_config
 from backend.database import get_storage, StorageBackend
-from backend.models import RemyQuery, RemyQueryInput
+from backend.models import RemyQuery, RemyQueryInput, RemyRun, RemyTask, RemyTaskInput, _now
 
 logger = logging.getLogger(__name__)
 
@@ -109,7 +109,6 @@ async def scrape_query(query_id: str, storage: StorageBackend = Depends(_get_sto
     if not query.enabled:
         raise HTTPException(status_code=400, detail="Query is disabled")
 
-    from backend.models import RemyRun, _now
     from backend.services.remy.scraper import run_query
 
     run = RemyRun(task_id="", trigger="manual", status="running")
@@ -191,3 +190,117 @@ async def get_listing(
                 logger.warning("Detail refresh failed for listing %s: %s", listing_id, e)
 
     return {"listing": listing.model_dump(), "refreshed": refreshed}
+
+
+# ── Tasks ────────────────────────────────────────────────────────────────────
+
+
+@router.get("/tasks")
+async def list_tasks(storage: StorageBackend = Depends(_get_storage)):
+    _require_remy_enabled()
+    tasks = await storage.list_remy_tasks()
+    return {"tasks": [t.model_dump() for t in tasks]}
+
+
+@router.post("/tasks")
+async def create_task(body: RemyTaskInput, storage: StorageBackend = Depends(_get_storage)):
+    _require_remy_enabled()
+    if body.query_id:
+        q = await storage.get_remy_query(body.query_id)
+        if q is None:
+            raise HTTPException(status_code=400, detail="query_id not found")
+    try:
+        task = RemyTask(**body.model_dump())
+    except Exception as e:
+        raise HTTPException(status_code=422, detail=str(e)) from e
+    await storage.save_remy_task(task)
+    try:
+        from backend.services.remy.scheduler import get_scheduler
+        await get_scheduler().sync_task(task)
+    except Exception as e:
+        logger.warning("Failed to schedule task %s: %s", task.id, e)
+
+    return {"task": task.model_dump()}
+
+
+@router.get("/tasks/{task_id}")
+async def get_task(task_id: str, storage: StorageBackend = Depends(_get_storage)):
+    _require_remy_enabled()
+    task = await storage.get_remy_task(task_id)
+    if task is None:
+        raise HTTPException(status_code=404, detail="Task not found")
+    return {"task": task.model_dump()}
+
+
+@router.put("/tasks/{task_id}")
+async def update_task(task_id: str, body: RemyTaskInput, storage: StorageBackend = Depends(_get_storage)):
+    _require_remy_enabled()
+    existing = await storage.get_remy_task(task_id)
+    if existing is None:
+        raise HTTPException(status_code=404, detail="Task not found")
+    data = body.model_dump()
+    data["id"] = task_id
+    data["created_at"] = existing.created_at
+    try:
+        task = RemyTask(**data)
+    except Exception as e:
+        raise HTTPException(status_code=422, detail=str(e)) from e
+    await storage.save_remy_task(task)
+    try:
+        from backend.services.remy.scheduler import get_scheduler
+        await get_scheduler().sync_task(task)
+    except Exception as e:
+        logger.warning("Failed to reschedule task %s: %s", task.id, e)
+
+    return {"task": task.model_dump()}
+
+
+@router.delete("/tasks/{task_id}")
+async def delete_task(task_id: str, storage: StorageBackend = Depends(_get_storage)):
+    _require_remy_enabled()
+    deleted = await storage.delete_remy_task(task_id)
+    if not deleted:
+        raise HTTPException(status_code=404, detail="Task not found")
+    try:
+        from backend.services.remy.scheduler import get_scheduler
+        await get_scheduler().sync_task(RemyTask(id=task_id, enabled=False))
+    except Exception as e:
+        logger.warning("Failed to remove task %s from scheduler: %s", task_id, e)
+
+    return {"ok": True}
+
+
+@router.post("/tasks/{task_id}/run")
+async def run_task_now(task_id: str):
+    _require_remy_enabled()
+    from backend.services.remy.scheduler import get_scheduler
+
+    run = await get_scheduler().run_now(task_id)
+    if run is None:
+        raise HTTPException(status_code=404, detail="Task not found")
+    return {"run": run.model_dump()}
+
+
+# ── Runs ─────────────────────────────────────────────────────────────────────
+
+
+@router.get("/runs")
+async def list_runs(
+    task_id: Optional[str] = None,
+    limit: int = 50,
+    offset: int = 0,
+    storage: StorageBackend = Depends(_get_storage),
+):
+    _require_remy_enabled()
+    limit = max(1, min(limit, 200))
+    runs = await storage.list_remy_runs(task_id=task_id, limit=limit, offset=offset)
+    return {"runs": [r.model_dump() for r in runs]}
+
+
+@router.get("/runs/{run_id}")
+async def get_run(run_id: str, storage: StorageBackend = Depends(_get_storage)):
+    _require_remy_enabled()
+    run = await storage.get_remy_run(run_id)
+    if run is None:
+        raise HTTPException(status_code=404, detail="Run not found")
+    return {"run": run.model_dump()}

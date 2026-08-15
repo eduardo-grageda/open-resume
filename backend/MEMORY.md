@@ -53,7 +53,7 @@ backend/
 - `RemyCity` — city search target: name, country, lat, lng, radius_km (default Guadalajara, MX, 25 km)
 - `RemyQuery` (+ `RemyQueryInput`) — saved search profile: name, keywords, cities, sources, remote_only, experience_level, exclude_keywords, enabled
 - `RemyListing` — one scraped job posting: source, query_id, title, company, location, url (dedup key), salary, description_md, posted_date, first_seen_at, last_seen_at, is_active, embedding_id, imported_position_id
-- `RemyTask` (+ `RemyTaskInput`) — cronjob: query_id, type (scrape|analyze|recommend), frequency (daily|weekly — validated at model level), day_of_week (0-6, weekly only), time, enabled
+- `RemyTask` (+ `RemyTaskInput`) — cronjob: query_id, type (scrape|analyze|recommend), frequency (daily|weekly — validated at model level), day_of_week (0-6, weekly only), time (HH:MM — validated at model level), enabled
 - `RemyRun` — execution record: task_id, trigger (cron|manual), status (running|success|failed|partial), started_at, finished_at, listings_found, new_listings, error, log
 - `RemyReport` — persisted AI output: run_id, query_id, type (analysis|recommendation), content_md, top_matches (`RemyTopMatch`: listing_id, score 0-100, reason)
 
@@ -119,6 +119,14 @@ backend/
 - `GET /api/remy/queries/{id}` — single query
 - `PUT /api/remy/queries/{id}` — update (preserves id/created_at)
 - `DELETE /api/remy/queries/{id}` — delete
+- `GET /api/remy/tasks` — list cron tasks
+- `POST /api/remy/tasks` — create (validates query_id exists, 422 on bad frequency/time/day_of_week); schedules job
+- `GET /api/remy/tasks/{id}` — single task
+- `PUT /api/remy/tasks/{id}` — update (preserves id/created_at); reschedules job
+- `DELETE /api/remy/tasks/{id}` — delete; removes job
+- `POST /api/remy/tasks/{id}/run` — manual trigger, returns persisted `RemyRun`
+- `GET /api/remy/runs` — run history (`?task_id=`, `?limit=`, `?offset=`, newest first)
+- `GET /api/remy/runs/{id}` — single run
 - All routes return 404 when `REMY_ENABLED=false`
 
 ### Services
@@ -177,6 +185,7 @@ backend/
 - `occ.py` — `OccSkill`: OCC Mundial HTML parser (occ.com.mx). Search URL: `/empleos/de-{keyword}/`. Parses `div.card-job-offer[data-id]` cards. Detail behind Cloudflare — best-effort with graceful fallback.
 - `scraper.py` — `ScraperService.run_query()`: resolve enabled skills for a query, run each skill, dedup by URL (normalize_url → `get_remy_listing_by_url`), upsert listings, mark stale listings inactive per (query, source). `ScrapeResult`/`ScrapeStats` dataclasses.
 - `POST /api/remy/queries/{id}/scrape` — manual trigger: executes scraper, persists `RemyRun` with stats.
+- `scheduler.py` — `RemyScheduler`: APScheduler `AsyncIOScheduler` (daily/weekly cron only). `start()` loads persisted enabled tasks from storage and registers jobs; `stop()` on shutdown; `sync_task(task)` add/update/remove one job (used by task routes); `run_now(task_id)` manual execution; `reload()` syncs all jobs with storage. Jobs: `max_instances=1`, `coalesce=True`, 1h misfire grace. Timezone from `REMY_TZ` (ZoneInfo) or server-local. `_execute_task()` persists `RemyRun` (running → success/partial/failed) with listings counts + per-source log; analyze/recommend task types record a graceful "not implemented (Phase 4)" failure. Wired to FastAPI lifespan in `main.py` when `REMY_ENABLED`.
 
 ### Main (`main.py`)
 - FastAPI app with CORS (localhost:5173)
@@ -184,5 +193,5 @@ backend/
 - `GET /api/health` — status, has_cv, storage backend info
 
 ### Not Yet Implemented
-- Remy Phase 3–6: cron scheduler (apscheduler), task CRUD routes, AI analysis/recommendations (LangGraph deepagents), chat endpoint, memory module, frontend — see `REMY_PHASES.md` and root `MEMORY.md`
+- Remy Phase 4–6: AI analysis/recommendations (LangGraph deepagents), chat endpoint, memory module, frontend — see `REMY_PHASES.md` and root `MEMORY.md`
 - Tests, linting

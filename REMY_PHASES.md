@@ -30,11 +30,11 @@
 - [ ] City management: models + Guadalajara default already done (Phase 1); add add/remove-city CRUD support + validation (radius > 0, lat/lng ranges). City management UI in Phase 5.
 
 ### Remy Phase 3: Cronjobs (daily/weekly only)
-- [ ] Add `apscheduler`; `RemyScheduler` service with `AsyncIOScheduler` wired to FastAPI lifespan.
-- [ ] `RemyTask` CRUD routes with strict frequency validation (daily | weekly).
-- [ ] Cron trigger mapping: daily → time; weekly → weekday + time; reschedule on task change; load-on-boot.
-- [ ] `RemyRun` persistence: cron + manual triggers, statuses, counts, errors.
-- [ ] `/api/remy/tasks/{id}/run` manual trigger + `/api/remy/runs` history.
+- [x] Add `apscheduler`; `RemyScheduler` service with `AsyncIOScheduler` wired to FastAPI lifespan.
+- [x] `RemyTask` CRUD routes with strict frequency validation (daily | weekly).
+- [x] Cron trigger mapping: daily → time; weekly → weekday + time; reschedule on task change; load-on-boot.
+- [x] `RemyRun` persistence: cron + manual triggers, statuses, counts, errors.
+- [x] `/api/remy/tasks/{id}/run` manual trigger + `/api/remy/runs` history.
 
 ### Remy Phase 4: AI Analysis & Recommendations
 - [ ] Wire `analyst` sub-agent → `RemyAnalyzer` service: market-trend + skills-gap report from nearest listings in vector space vs base CV (prompt from `prompts.py`).

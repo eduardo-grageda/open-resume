@@ -1,8 +1,11 @@
 from __future__ import annotations
 
+import re
 from datetime import datetime
 from typing import Any, Optional
 from uuid import uuid4
+
+_TIME_RE = re.compile(r"^\d{2}:\d{2}$")
 
 from pydantic import BaseModel, Field, model_validator
 
@@ -246,6 +249,8 @@ class RemyTask(BaseModel):
             raise ValueError("type must be 'scrape', 'analyze', or 'recommend'")
         if self.frequency == "weekly" and (self.day_of_week < 0 or self.day_of_week > 6):
             raise ValueError("day_of_week must be 0-6 for weekly tasks")
+        if not _TIME_RE.match(self.time):
+            raise ValueError("time must be in HH:MM format")
         return self
 
 

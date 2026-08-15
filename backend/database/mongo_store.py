@@ -4,7 +4,7 @@ from typing import Optional
 
 from backend.config import AppConfig
 from backend.database import StorageBackend
-from backend.models import BaseCV, OnboardingSession, Position
+from backend.models import BaseCV, OnboardingSession, Position, StarSession, StarStory
 
 
 class MongoStore(StorageBackend):
@@ -113,6 +113,53 @@ class MongoStore(StorageBackend):
     async def delete_onboarding_session(self, session_id: str) -> None:
         col = await self._collection("onboarding_sessions")
         await col.delete_one({"id": session_id})
+
+    # --- STAR ---
+
+    async def get_star_session(self, session_id: str) -> Optional[StarSession]:
+        col = await self._collection("star_sessions")
+        doc = await col.find_one({"id": session_id})
+        if doc is None:
+            return None
+        doc.pop("_id", None)
+        return StarSession(**doc)
+
+    async def save_star_session(self, session: StarSession) -> None:
+        col = await self._collection("star_sessions")
+        data = session.model_dump()
+        await col.replace_one({"id": session.id}, data, upsert=True)
+
+    async def delete_star_session(self, session_id: str) -> None:
+        col = await self._collection("star_sessions")
+        await col.delete_one({"id": session_id})
+
+    async def list_star_stories(self) -> list[StarStory]:
+        col = await self._collection("star_stories")
+        cursor = col.find({})
+        results: list[StarStory] = []
+        async for doc in cursor:
+            doc.pop("_id", None)
+            results.append(StarStory(**doc))
+        return results
+
+    async def get_star_story(self, story_id: str) -> Optional[StarStory]:
+        col = await self._collection("star_stories")
+        doc = await col.find_one({"id": story_id})
+        if doc is None:
+            return None
+        doc.pop("_id", None)
+        return StarStory(**doc)
+
+    async def save_star_story(self, story: StarStory) -> None:
+        col = await self._collection("star_stories")
+        story.updated_at = _now()
+        data = story.model_dump()
+        await col.replace_one({"id": story.id}, data, upsert=True)
+
+    async def delete_star_story(self, story_id: str) -> bool:
+        col = await self._collection("star_stories")
+        result = await col.delete_one({"id": story_id})
+        return result.deleted_count > 0
 
 
 def _now() -> str:

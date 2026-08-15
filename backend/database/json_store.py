@@ -9,11 +9,13 @@ from typing import Optional
 
 from backend.config import AppConfig, DATA_DIR, load_config, save_config as file_save_config
 from backend.database import StorageBackend
-from backend.models import BaseCV, OnboardingSession, Position
+from backend.models import BaseCV, OnboardingSession, Position, StarSession, StarStory
 
 POSITIONS_DIR = DATA_DIR / "positions"
 EXPORTS_DIR = DATA_DIR / "exports"
 SESSIONS_DIR = DATA_DIR / "onboarding_sessions"
+STAR_SESSIONS_DIR = DATA_DIR / "star_sessions"
+STAR_STORIES_DIR = DATA_DIR / "star_stories"
 CV_PATH = DATA_DIR / "base_cv.json"
 
 
@@ -28,6 +30,8 @@ class JsonStore(StorageBackend):
         POSITIONS_DIR.mkdir(parents=True, exist_ok=True)
         EXPORTS_DIR.mkdir(parents=True, exist_ok=True)
         SESSIONS_DIR.mkdir(parents=True, exist_ok=True)
+        STAR_SESSIONS_DIR.mkdir(parents=True, exist_ok=True)
+        STAR_STORIES_DIR.mkdir(parents=True, exist_ok=True)
 
     # --- Base CV ---
 
@@ -133,3 +137,55 @@ class JsonStore(StorageBackend):
         session_path = SESSIONS_DIR / f"{session_id}.json"
         if session_path.exists():
             session_path.unlink()
+
+    # --- STAR ---
+
+    async def get_star_session(self, session_id: str) -> Optional[StarSession]:
+        session_path = STAR_SESSIONS_DIR / f"{session_id}.json"
+        if not session_path.exists():
+            return None
+        with open(session_path) as f:
+            return StarSession(**json.load(f))
+
+    async def save_star_session(self, session: StarSession) -> None:
+        STAR_SESSIONS_DIR.mkdir(parents=True, exist_ok=True)
+        session_path = STAR_SESSIONS_DIR / f"{session.id}.json"
+        with open(session_path, "w") as f:
+            json.dump(session.model_dump(), f, indent=2, ensure_ascii=False)
+
+    async def delete_star_session(self, session_id: str) -> None:
+        session_path = STAR_SESSIONS_DIR / f"{session_id}.json"
+        if session_path.exists():
+            session_path.unlink()
+
+    async def list_star_stories(self) -> list[StarStory]:
+        results: list[StarStory] = []
+        if not STAR_STORIES_DIR.exists():
+            return results
+        for story_file in sorted(STAR_STORIES_DIR.iterdir()):
+            if not story_file.suffix == ".json":
+                continue
+            with open(story_file) as f:
+                results.append(StarStory(**json.load(f)))
+        return results
+
+    async def get_star_story(self, story_id: str) -> Optional[StarStory]:
+        story_path = STAR_STORIES_DIR / f"{story_id}.json"
+        if not story_path.exists():
+            return None
+        with open(story_path) as f:
+            return StarStory(**json.load(f))
+
+    async def save_star_story(self, story: StarStory) -> None:
+        story.updated_at = _now()
+        STAR_STORIES_DIR.mkdir(parents=True, exist_ok=True)
+        story_path = STAR_STORIES_DIR / f"{story.id}.json"
+        with open(story_path, "w") as f:
+            json.dump(story.model_dump(), f, indent=2, ensure_ascii=False)
+
+    async def delete_star_story(self, story_id: str) -> bool:
+        story_path = STAR_STORIES_DIR / f"{story_id}.json"
+        if story_path.exists():
+            story_path.unlink()
+            return True
+        return False

@@ -723,6 +723,248 @@ vite>=5.0.0
 
 ---
 
+## Remy — AI Agent (Autonomous Job Hunter)
+
+Remy is an autonomous AI agent integrated into Open Resume. It has **skills** to scrape job platforms (LinkedIn, OCC, and others), persists every search in a **search database**, and runs on user-configured **cronjobs** (daily or weekly only) that execute three task types: **scraping**, **analysis**, and **recommendations**.
+
+### Overview
+
+- **Skills**: pluggable scraper modules — one per platform (LinkedIn, OCC, Computrabajo, Indeed, ...). A common registry makes skills discoverable and individually enable/disableable.
+- **Search database**: every scraped listing is stored, deduplicated by URL, and tracked over time (`first_seen`, `last_seen`, `is_active`). Nothing scraped is thrown away.
+- **Scheduler**: cronjobs with exactly two frequencies — **daily** (fixed time, every day) and **weekly** (fixed weekday + time). No other schedules. Tasks: `scrape`, `analyze`, `recommend`.
+- **AI analysis**: the LLM reviews newly scraped listings against the base CV — market trends, keyword clustering, skills gaps.
+- **Recommendations**: the LLM scores listings (0–100) against the base CV and returns top matches with reasons, so the user can import them as Positions.
+
+### Legal / Polite Scraping Rules
+
+- LinkedIn: prefer the public Jobs RSS feed / guest search endpoint. Direct scraping of LinkedIn is against its ToS and heavily rate-limited — the plan treats LinkedIn as a "best-effort, RSS-based" skill and shows a disclaimer in the UI.
+- OCC: parse the public search results pages (`occ.com.mx`) with BeautifulSoup — already a dependency.
+- All skills: respect `robots.txt`, custom User-Agent, configurable delay between requests, per-source rate limits, caching (don't re-fetch listing details we already have).
+- If a platform blocks direct scraping, fall back to the existing SerpAPI/Brave `JobSearchService` as an aggregation source.
+
+### Data Models (new Pydantic models in `backend/models.py`)
+
+**RemyQuery** — saved search profile (what to look for):
+```json
+{
+  "id": "uuid",
+  "name": "string",
+  "keywords": ["string"],
+  "locations": ["string"],
+  "sources": ["linkedin", "occ", "computrabajo", "serpapi"],
+  "remote_only": false,
+  "experience_level": "entry | mid | senior | lead | executive | any",
+  "exclude_keywords": ["string"],
+  "enabled": true,
+  "created_at": "ISO8601",
+  "updated_at": "ISO8601"
+}
+```
+
+**RemyListing** — one scraped job posting (the search database):
+```json
+{
+  "id": "uuid",
+  "source": "linkedin | occ | computrabajo | indeed | serpapi | brave",
+  "query_id": "uuid (optional — which query found it)",
+  "title": "string",
+  "company": "string",
+  "location": "string",
+  "url": "string (unique dedup key)",
+  "salary": "string (optional)",
+  "description_md": "string",
+  "posted_date": "string",
+  "first_seen_at": "ISO8601",
+  "last_seen_at": "ISO8601",
+  "is_active": true,
+  "imported_position_id": "uuid (optional — imported into Positions)"
+}
+```
+
+**RemyTask** — one cronjob (daily or weekly only):
+```json
+{
+  "id": "uuid",
+  "query_id": "uuid",
+  "type": "scrape | analyze | recommend",
+  "frequency": "daily | weekly",
+  "day_of_week": 0,
+  "time": "HH:MM",
+  "enabled": true,
+  "created_at": "ISO8601",
+  "updated_at": "ISO8601"
+}
+```
+- Validation: `frequency` accepts only `daily` / `weekly` (reject anything else at model level). `day_of_week` required and used only for weekly.
+
+**RemyRun** — execution history (audit trail of the agent):
+```json
+{
+  "id": "uuid",
+  "task_id": "uuid",
+  "trigger": "cron | manual",
+  "status": "running | success | failed | partial",
+  "started_at": "ISO8601",
+  "finished_at": "ISO8601 (optional)",
+  "listings_found": 0,
+  "new_listings": 0,
+  "error": "string (optional)",
+  "log": "string (optional)"
+}
+```
+
+**RemyReport** — persisted AI output of an analyze/recommend run:
+```json
+{
+  "id": "uuid",
+  "run_id": "uuid",
+  "query_id": "uuid",
+  "type": "analysis | recommendation",
+  "content_md": "string",
+  "top_matches": [
+    { "listing_id": "uuid", "score": 0, "reason": "string" }
+  ],
+  "created_at": "ISO8601"
+}
+```
+
+### Storage Layout
+
+- **JSON mode**: `data/remy/queries.json`, `data/remy/listings.json`, `data/remy/tasks.json`, `data/remy/runs.json`, `data/remy/reports.json`.
+- **MongoDB mode**: collections `remy_queries`, `remy_listings` (index on `url`), `remy_tasks`, `remy_runs`, `remy_reports`.
+- `StorageBackend` ABC in `backend/database/__init__.py` gains a `# --- Remy ---` section; both `JsonStore` and `MongoStore` implement it.
+
+### Scraper Skills Architecture
+
+```
+backend/services/remy/
+├── __init__.py          # skill registry: get_skill(name), available_skills()
+├── base.py              # ScraperSkill ABC: name, search(query, ...), fetch_detail(url)
+├── linkedin.py          # LinkedIn Jobs RSS / guest search endpoint
+├── occ.py               # OCC Mundial HTML parser (occ.com.mx)
+├── computrabajo.py      # Computrabajo HTML parser
+├── indeed.py            # (best-effort) Indeed HTML/RSS parser
+└── aggregator.py        # wraps existing JobSearchService (SerpAPI/Brave) as a skill
+```
+
+- `search()` returns normalized `RemyListing` dicts; `fetch_detail(url)` returns cleaned markdown (reuse the existing `extract_jd` LLM cleaning from `JobSearchService`).
+- Dedup + upsert happens at the service layer, before persistence.
+- Skills are registered in a dict; enabled sources come from config (`RemyQuery.sources` ∩ enabled skills).
+
+### Scheduler
+
+- Dependency: `apscheduler` (AsyncIOScheduler, started in FastAPI lifespan alongside the app, stopped on shutdown).
+- CronTriggers: daily → `hour/minute`; weekly → `day_of_week/hour/minute`. Both derived from `RemyTask.time` / `day_of_week`.
+- On boot: load all enabled tasks from storage and register them. On task create/update/delete: reschedule immediately.
+- Every execution writes a `RemyRun` (start, finish, counts, error). Manual trigger: `POST /api/remy/tasks/{id}/run`.
+- Timezone: fixed to server local time (configurable later via `REMY_TZ` env var).
+
+### AI Analysis & Recommendations
+
+- **Analyze** (system prompt): "You are a job-market analyst. Given the base CV and newly scraped listings, produce: market trends, top demanded skills, skills gaps vs the CV, salary range signals, keyword clusters. Never invent data not present in the listings."
+- **Recommend** (system prompt): "You are a job-match advisor. Score each listing 0–100 against the base CV, considering skills, experience level, and tools. Return the top N matches (default 10) with score + one-line reason, ordered desc."
+- Both flows reuse `services/llm.py`; outputs persist as `RemyReport`.
+
+### API Routes (`backend/routes/remy.py`, prefix `/api/remy`)
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/sources` | List available scraper skills + enabled state |
+| `GET/POST` | `/queries` | List / create search profiles |
+| `GET/PUT/DELETE` | `/queries/{id}` | Read / update / delete a query |
+| `GET/POST` | `/tasks` | List / create cronjobs (validates frequency ∈ {daily, weekly}) |
+| `GET/PUT/DELETE` | `/tasks/{id}` | Read / update / delete a cronjob |
+| `POST` | `/tasks/{id}/run` | Manual trigger of a task |
+| `GET` | `/runs` | Execution history (filter by task, status) |
+| `GET` | `/listings` | Search database browser (filter by source, query, active, new) |
+| `GET` | `/listings/{id}` | Single listing detail |
+| `POST` | `/listings/{id}/import` | Import listing as a Position (reuses `/api/positions` flow) |
+| `POST` | `/analyze/{query_id}` | Run AI analysis now, returns/stores `RemyReport` |
+| `POST` | `/recommend/{query_id}` | Run recommendations now, returns/stores `RemyReport` |
+| `GET` | `/reports/{query_id}` | List stored reports for a query |
+
+### Frontend
+
+| Path | Page | Description |
+|------|------|-------------|
+| `/remy` | `RemyPage` | Agent dashboard: enabled skills, next scheduled runs, recent activity, new listings count, latest recommendations |
+| `/remy/queries` | `RemyQueriesPage` | Manage search profiles (keywords, locations, sources, exclusions) |
+| `/remy/tasks` | `RemyTasksPage` | Manage cronjobs: type (scrape/analyze/recommend), **frequency toggle daily/weekly only**, weekday picker (weekly), time picker, enable/disable, "Run now" |
+| `/remy/listings` | `RemyListingsPage` | Search-database browser with filters + "Import to Position" |
+| `/remy/reports` | `RemyReportsPage` | Rendered analysis/recommendation reports with top-match list |
+
+New components: `RemyTaskForm.jsx` (schedule editor), `ListingCard.jsx`, `RemyNavItem` added to `Layout.jsx` sidebar. Reuses `MdEditor`/`AdaptedPreview` for report rendering.
+
+### Config Additions
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `REMY_ENABLED` | `true` | Master switch for the agent (scheduler + routes) |
+| `REMY_SOURCES` | `linkedin,occ,serpapi` | Comma-separated enabled skills |
+| `REMY_REQUEST_DELAY` | `2.0` | Seconds between scraper requests (politeness) |
+| `REMY_TZ` | server local | Cron timezone |
+
+### Dependencies to Add
+
+```
+apscheduler>=3.10
+```
+(httpx + beautifulsoup4 already present; frontend needs nothing new.)
+
+---
+
+## Remy Implementation Phases
+
+### Remy Phase 1: Agent Foundation (backend core)
+- [ ] Pydantic models: `RemyQuery`, `RemyListing`, `RemyTask`, `RemyRun`, `RemyReport`.
+- [ ] `StorageBackend` extension + `JsonStore` implementation (JSON files under `data/remy/`).
+- [ ] Config additions (`REMY_ENABLED`, `REMY_SOURCES`, `REMY_REQUEST_DELAY`, `REMY_TZ`).
+- [ ] `backend/services/remy/` package: `ScraperSkill` ABC + skill registry.
+- [ ] `/api/remy/sources` + `/api/remy/queries` CRUD routes.
+
+### Remy Phase 2: Scraper Skills & Search Database
+- [ ] `occ.py` skill — parse OCC search results + listing pages (HTML → normalized listings).
+- [ ] `linkedin.py` skill — public Jobs RSS feed / guest endpoint (with ToS disclaimer in UI).
+- [ ] `aggregator.py` skill — wrap existing `JobSearchService` (SerpAPI/Brave) into a skill.
+- [ ] Scraper service: run query against enabled skills, dedup by URL, upsert listings (`first_seen`/`last_seen`/`is_active`).
+- [ ] `/api/remy/listings` browser routes + single listing detail.
+
+### Remy Phase 3: Cronjobs (daily/weekly only)
+- [ ] Add `apscheduler`; `RemyScheduler` service with `AsyncIOScheduler` wired to FastAPI lifespan.
+- [ ] `RemyTask` CRUD routes with strict frequency validation (daily | weekly).
+- [ ] Cron trigger mapping: daily → time; weekly → weekday + time; reschedule on task change; load-on-boot.
+- [ ] `RemyRun` persistence: cron + manual triggers, statuses, counts, errors.
+- [ ] `/api/remy/tasks/{id}/run` manual trigger + `/api/remy/runs` history.
+
+### Remy Phase 4: AI Analysis & Recommendations
+- [ ] `RemyAnalyzer` service: market-trend + skills-gap report from listings vs base CV (prompt design in `services/remy/prompts.py`).
+- [ ] `RemyRecommender` service: 0–100 match scoring + top-N with reasons.
+- [ ] `RemyReport` persistence + `/api/remy/analyze/{query_id}`, `/api/remy/recommend/{query_id}`, `/api/remy/reports/{query_id}`.
+- [ ] Wire analyze/recommend as schedulable task types.
+
+### Remy Phase 5: Frontend
+- [ ] `RemyPage` dashboard with schedule status + recent activity.
+- [ ] `RemyQueriesPage` — search profile CRUD.
+- [ ] `RemyTasksPage` + `RemyTaskForm` — frequency toggle (daily/weekly only), weekday + time pickers, enable/disable, run now.
+- [ ] `RemyListingsPage` — search database browser with filters + "Import to Position".
+- [ ] `RemyReportsPage` — rendered reports + top-match list.
+- [ ] Layout nav entry + api.js helpers.
+
+### Remy Phase 6: Integration, Polish & Mongo
+- [ ] "Import listing as Position" end-to-end (listing → Position → adapt → export).
+- [ ] `MongoStore` Remy collections + indexes (unique `url` on listings).
+- [ ] Politeness: per-source rate limiting, robots.txt checks, request delay from config.
+- [ ] Empty states, loading/error handling, LinkedIn ToS disclaimer UI.
+- [ ] Docs: README Remy section, PLAN/MEMORY updates.
+
+### Remy Open Questions
+1. **LinkedIn depth**: start with public RSS (low risk) and optionally add a "user-provided cookies" mode later for logged-in scraping — never ship credentials in the app.
+2. **OCC parsing**: OCC's HTML structure changes occasionally — pin parser versions and log parse failures as `partial` runs instead of crashing.
+3. **Timezone**: server-local by default; `REMY_TZ` later via `zoneinfo` if users request it.
+4. **Recommendation → action**: recommendations link to import flow; auto-adaptation of CVs from cron remains a manual step (user approval), keeping the "no invented experience" principle.
+
+---
+
 ## Open Questions & Decisions
 
 1. **Default AI model**: `deepseek/deepseek-v4-pro` via OpenRouter. User can change to any model/provider in Settings.

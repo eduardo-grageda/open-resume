@@ -164,3 +164,33 @@ class SearchRequest(BaseModel):
 
 class SearchImportRequest(BaseModel):
     search_result: dict
+
+
+class StarStory(BaseModel):
+    id: str = Field(default_factory=_uid)
+    title: str = ""
+    source_company: str = ""
+    source_title: str = ""
+    situation: str = ""
+    task: str = ""
+    action: str = ""
+    result: str = ""
+    interview_pitch: str = ""
+    created_at: str = Field(default_factory=_now)
+    updated_at: str = Field(default_factory=_now)
+
+
+class StarSession(BaseModel):
+    id: str = Field(default_factory=_uid)
+    state: str = "in_progress"
+    first_name: str = ""
+    last_name: str = ""
+    target_role: str = ""
+    cv_summary: str = ""
+    current_phase: str = "intro"
+    current_story_index: int = 0
+    current_star_step: str = ""
+    achievements: list[dict] = Field(default_factory=list)
+    conversation_history: list[ConversationMessage] = Field(default_factory=list)
+    extracted_stories: list[dict] = Field(default_factory=list)
+    created_at: str = Field(default_factory=_now)

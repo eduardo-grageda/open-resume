@@ -12,6 +12,7 @@ from backend.routes.cv import router as cv_router
 from backend.routes.positions import router as positions_router
 from backend.routes.search import router as search_router
 from backend.routes.settings import router as settings_router
+from backend.routes.star import router as star_router
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("open-resume")
@@ -48,6 +49,7 @@ app.include_router(settings_router)
 app.include_router(cv_router)
 app.include_router(positions_router)
 app.include_router(search_router)
+app.include_router(star_router)
 
 
 @app.get("/api/health")

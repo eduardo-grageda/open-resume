@@ -14,7 +14,7 @@
 
 - `backend/` — FastAPI app with CORS, health endpoint, config loader, settings routes, CV CRUD routes, positions CRUD routes, LLM client, JSON storage backend, MongoDB storage adapter, Pydantic v2 models, migration script.
 - `frontend/` — React 18 + Vite 5 app with react-router-dom v6, react-markdown v9. Six pages (Home, Settings, CV Editor, Positions list, Position detail), Layout with sidebar nav, MdEditor split-pane component, api.js fetch wrapper. Builds clean. Dockerfile for containerized dev.
-- `data/` — runtime directory (gitignored) for config, CV, positions, exports, onboarding sessions.
+- `data/` — runtime directory (gitignored) for config, CV, positions, exports, onboarding sessions, star sessions, star stories.
 - `PLAN.md` — full architecture, data models, API routes, implementation phases.
 - `AGENTS.md` — tech stack, commands, conventions, commit format.
 - `Dockerfile` — backend container image (Python 3.10-slim).
@@ -28,6 +28,7 @@
 
 ### What does NOT exist yet
 
+- **Remy AI Agent** — planned in `PLAN.md` (Remy Phases 1–6): autonomous job scraping, search database, daily/weekly cronjobs, AI analysis & recommendations. Not yet implemented.
 - Tests, linting
 
 ### Key decisions

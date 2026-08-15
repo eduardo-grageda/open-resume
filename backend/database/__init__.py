@@ -4,7 +4,7 @@ from abc import ABC, abstractmethod
 from typing import Optional
 
 from backend.config import AppConfig, load_config
-from backend.models import BaseCV, OnboardingSession, Position
+from backend.models import BaseCV, OnboardingSession, Position, StarSession, StarStory
 
 
 class StorageBackend(ABC):
@@ -55,6 +55,35 @@ class StorageBackend(ABC):
 
     @abstractmethod
     async def delete_onboarding_session(self, session_id: str) -> None:
+        ...
+
+    # --- STAR ---
+    @abstractmethod
+    async def get_star_session(self, session_id: str) -> Optional[StarSession]:
+        ...
+
+    @abstractmethod
+    async def save_star_session(self, session: StarSession) -> None:
+        ...
+
+    @abstractmethod
+    async def delete_star_session(self, session_id: str) -> None:
+        ...
+
+    @abstractmethod
+    async def list_star_stories(self) -> list[StarStory]:
+        ...
+
+    @abstractmethod
+    async def get_star_story(self, story_id: str) -> Optional[StarStory]:
+        ...
+
+    @abstractmethod
+    async def save_star_story(self, story: StarStory) -> None:
+        ...
+
+    @abstractmethod
+    async def delete_star_story(self, story_id: str) -> bool:
         ...
 
 

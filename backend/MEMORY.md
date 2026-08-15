@@ -16,12 +16,14 @@ backend/
 │   ├── settings.py      # GET/PUT /api/settings, POST /api/settings/test-llm
 │   ├── cv.py            # GET/PUT /api/cv, POST onboarding (start/answer/confirm/progress), ingest-pdf stubs
 │   ├── positions.py     # CRUD /api/positions, adapt, export md/pdf
-│   └── search.py        # POST /api/search/jobs, GET /api/search/sources, POST /api/search/extract-jd
+│   ├── search.py        # POST /api/search/jobs, GET /api/search/sources, POST /api/search/extract-jd
+│   └── star.py          # POST /api/star/start, /answer, /confirm, GET/PUT/DELETE /api/star/stories
 ├── services/
 │   ├── llm.py            # LLMClient wrapping openai SDK (AsyncOpenAI)
 │   ├── onboarding.py     # OnboardingService: session state machine, prompt templates, answer processing, extracted→BaseCV conversion
 │   ├── adapter.py        # AdapterService: CV tailoring via LLM, prompt construction, response parsing
 │   ├── job_search.py     # JobSearchService: SerpAPI + Brave Search, JD extraction via LLM
+│   ├── star.py           # StarService: STAR interview prep, achievement identification, S/T/A/R Q&A, pitch generation
 │   └── __init__.py
 └── requirements.txt
 ```
@@ -43,9 +45,11 @@ backend/
 - `SettingsUpdate` — partial settings update model
 - `SearchRequest` — job search query with filters (query, location, remote, job_type, experience_level, date_posted)
 - `SearchImportRequest` — import a search result as a position
+- `StarStory` — single STAR story: title, source_company, source_title, situation, task, action, result, interview_pitch, timestamps
+- `StarSession` — STAR prep session state: first_name, last_name, cv_summary, current_phase, current_star_step, achievements, conversation_history, extracted_stories
 
 ### Storage (`database/`)
-- `StorageBackend` ABC: get_cv, save_cv, get_config, save_config, list_positions, get_position, save_position, delete_position, get/save/delete onboarding sessions
+- `StorageBackend` ABC: get_cv, save_cv, get_config, save_config, list_positions, get_position, save_position, delete_position, get/save/delete onboarding sessions, get/save/delete star sessions, list/get/save/delete star stories
 - `JsonStore` — full implementation using `data/` directory
 - `MongoStore` — full implementation using pymongo AsyncMongoClient with lazy connection
 - `get_storage()` factory — returns JsonStore or MongoStore based on config
@@ -88,6 +92,16 @@ backend/
 - `GET /api/search/sources` — list available search providers
 - `POST /api/search/extract-jd` — fetch URL, extract job description via LLM
 
+**STAR (`routes/star.py`)**
+- `POST /api/star/start` — begin STAR prep session; analyzes CV career history, returns first question
+- `POST /api/star/answer` — processes user answer, returns next question or completion with extracted stories
+- `POST /api/star/confirm` — finalizes stories, generates interview pitches, saves to storage, deletes session
+- `GET /api/star/stories` — list all saved STAR stories
+- `GET /api/star/stories/{id}` — get a single story
+- `PUT /api/star/stories/{id}` — update a story's fields
+- `DELETE /api/star/stories/{id}` — delete a story
+- `POST /api/star/generate-pitch/{id}` — generate polished interview pitch for a single story
+
 ### Services
 
 **LLM (`services/llm.py`)**
@@ -125,6 +139,15 @@ backend/
 - `extract_text()` — uses pdfplumber to extract text from PDF pages
 - `parse_to_cv()` — sends extracted text to LLM with structured JSON schema prompt
 - `parsed_to_base_cv()` — converts LLM JSON response to validated BaseCV model
+
+**STAR (`services/star.py`)**
+- `StarService`: manages STAR interview prep session state machine
+- `_format_cv_for_star()` — converts BaseCV to structured text for LLM context
+- `_extract_achievements_from_cv()` — pulls accomplishments from career entries, achievements, and projects
+- `start_session()` — analyzes CV, identifies top achievements, returns intro question
+- `process_answer()` — processes user answers through intro → select_achievements → star_questions (S→T→A→R) → review phases
+- `generate_pitches()` — generates polished 2-minute interview pitches from completed STAR stories
+- `_merge_stories()` — merges extracted story data across LLM responses, keeping longest field values
 
 ### Main (`main.py`)
 - FastAPI app with CORS (localhost:5173)

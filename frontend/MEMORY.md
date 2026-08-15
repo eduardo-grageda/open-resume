@@ -35,7 +35,8 @@ frontend/
         ├── CvEditorPage.jsx   # Markdown CV editor with template, save to backend
         ├── PositionsPage.jsx  # List positions grouped by company, create/delete
         ├── PositionPage.jsx   # Single position: 3 tabs (JD, Tailored CV, Export)
-        └── SearchJobsPage.jsx    # Web job search with filters, results, import flow
+        ├── SearchJobsPage.jsx # Web job search with filters, results, import flow
+        └── StarPage.jsx       # STAR interview prep: achievement Q&A chat, story review/editor, saved stories list
 ```
 
 ## Design System (`App.css`)
@@ -46,7 +47,7 @@ frontend/
 
 ## API Client (`api.js`)
 - Base URL: `/api`
-- Methods: `health`, `getSettings`, `updateSettings`, `testLlm`, `getCv`, `updateCv`, `ingestPdf`, `onboardStart`, `onboardAnswer`, `onboardConfirm`, `onboardProgress`, `listPositions`, `getPosition`, `createPosition`, `updatePosition`, `deletePosition`, `adaptPosition`, `exportMarkdownUrl`, `exportPdfUrl`, `searchJobs`, `getSearchSources`, `extractJd`
+- Methods: `health`, `getSettings`, `updateSettings`, `testLlm`, `getCv`, `updateCv`, `ingestPdf`, `onboardStart`, `onboardAnswer`, `onboardConfirm`, `onboardProgress`, `listPositions`, `getPosition`, `createPosition`, `updatePosition`, `deletePosition`, `adaptPosition`, `exportMarkdownUrl`, `exportPdfUrl`, `searchJobs`, `getSearchSources`, `extractJd`, `starStart`, `starAnswer`, `starConfirm`, `listStarStories`, `getStarStory`, `updateStarStory`, `deleteStarStory`, `generateStarPitch`
 - Handles JSON serialization, error extraction from response body
 
 ## Pages
@@ -99,11 +100,22 @@ frontend/
 - "Import" button on each result: fetches JD via `POST /api/search/extract-jd`, creates Position, redirects to `/positions/:id`
 - Loading, empty, and error states handled
 
+### StarPage (`/star`)
+- Multi-step STAR interview prep builder
+  - **Step 1 — Start**: Description of STAR methodology, optional target role; calls `POST /api/star/start`
+  - **Step 2 — Chat**: OnboardingChat component with AI/user bubbles; StarProgress showing phase and S→T→A→R step dots; calls `POST /api/star/answer` for each response; stories accumulate incrementally
+  - **Step 3 — Review**: StoryEditor inline editing for each story (Situation/Task/Action/Result fields + interview pitch); Generate Pitch button calls `POST /api/star/generate-pitch/{id}`; Delete and Edit controls
+  - **Saved View**: Lists all saved stories with full editing, pitch generation, and deletion
+- Requires base CV to exist; shows "No CV Found" state otherwise
+- `StarProgress` component: phase label + S/T/A/R step indicator dots
+- `StoryEditor` component: collapsible edit/view for individual STAR stories
+- `SavedStories` component: loads and displays all saved stories with full management
+
 ## Components
 
 ### Layout
 - Fixed sidebar (220px) with brand "Open Resume"
-- NavLink items: Dashboard, Base CV, Onboarding, Positions, Search Jobs (highlighted when active)
+- NavLink items: Dashboard, Base CV, Onboarding, Interview Prep, Positions, Search Jobs (highlighted when active)
 - Settings link at bottom
 - Main content area with left margin offset
 

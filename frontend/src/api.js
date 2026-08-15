@@ -66,6 +66,16 @@ export const api = {
   getSearchSources: () => request('GET', '/search/sources'),
   extractJd: (body) => request('POST', '/search/extract-jd', body),
   ingestUrl: (body) => request('POST', '/positions/ingest-url', body),
+
+  // STAR Interview Prep
+  starStart: (body) => request('POST', '/star/start', body),
+  starAnswer: (body) => request('POST', '/star/answer', body),
+  starConfirm: (body) => request('POST', '/star/confirm', body),
+  listStarStories: () => request('GET', '/star/stories'),
+  getStarStory: (id) => request('GET', `/star/stories/${id}`),
+  updateStarStory: (id, body) => request('PUT', `/star/stories/${id}`, body),
+  deleteStarStory: (id) => request('DELETE', `/star/stories/${id}`),
+  generateStarPitch: (id) => request('POST', `/star/generate-pitch/${id}`),
 };
 
 export default api;

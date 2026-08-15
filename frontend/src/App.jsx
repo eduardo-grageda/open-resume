@@ -8,6 +8,7 @@ import OnboardingPage from './pages/OnboardingPage';
 import PositionsPage from './pages/PositionsPage';
 import PositionPage from './pages/PositionPage';
 import SearchJobsPage from './pages/SearchJobsPage';
+import StarPage from './pages/StarPage';
 import api from './api';
 
 export default function App() {
@@ -54,6 +55,7 @@ export default function App() {
         <Route path="/positions" element={<PositionsPage />} />
         <Route path="/positions/:id" element={<PositionPage />} />
         <Route path="/search" element={<SearchJobsPage />} />
+        <Route path="/star" element={<StarPage />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </Layout>

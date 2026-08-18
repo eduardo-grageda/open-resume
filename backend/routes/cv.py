@@ -14,6 +14,18 @@ from backend.services.onboarding import SECTIONS, SECTION_LABELS, OnboardingServ
 router = APIRouter(prefix="/api/cv", tags=["cv"])
 
 
+async def _maybe_snapshot(cv: BaseCV) -> None:
+    """Snapshot the CV into Remy memory if Remy is enabled."""
+    try:
+        config = load_config()
+        if not config.remy_enabled:
+            return
+        from backend.services.remy.memory import get_remy_memory
+        await get_remy_memory().snapshot_cv(cv.model_dump())
+    except Exception:
+        pass
+
+
 async def _get_storage() -> StorageBackend:
     return get_storage()
 
@@ -33,6 +45,7 @@ async def get_cv(storage: StorageBackend = Depends(_get_storage)):
 @router.put("")
 async def update_cv(body: BaseCV, storage: StorageBackend = Depends(_get_storage)):
     await storage.save_cv(body)
+    await _maybe_snapshot(body)
     return {"ok": True, "cv": body.model_dump()}
 
 
@@ -79,6 +92,7 @@ async def ingest_pdf(file: UploadFile = File(...)):
 @router.post("/ingest-pdf/confirm")
 async def ingest_pdf_confirm(body: BaseCV, storage: StorageBackend = Depends(_get_storage)):
     await storage.save_cv(body)
+    await _maybe_snapshot(body)
     return {"ok": True, "cv": body.model_dump()}
 
 
@@ -193,6 +207,7 @@ async def onboard_confirm(
 
     base_cv = service.extracted_to_base_cv(session.extracted_data)
     await storage.save_cv(base_cv)
+    await _maybe_snapshot(base_cv)
     await storage.delete_onboarding_session(session_id)
 
     return {

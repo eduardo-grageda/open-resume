@@ -76,6 +76,124 @@ export const api = {
   updateStarStory: (id, body) => request('PUT', `/star/stories/${id}`, body),
   deleteStarStory: (id) => request('DELETE', `/star/stories/${id}`),
   generateStarPitch: (id) => request('POST', `/star/generate-pitch/${id}`),
+
+  // Remy — sources
+  getRemySources: () => request('GET', '/remy/sources'),
+
+  // Remy — queries
+  listRemyQueries: () => request('GET', '/remy/queries'),
+  createRemyQuery: (body) => request('POST', '/remy/queries', body),
+  getRemyQuery: (id) => request('GET', `/remy/queries/${id}`),
+  updateRemyQuery: (id, body) => request('PUT', `/remy/queries/${id}`, body),
+  deleteRemyQuery: (id) => request('DELETE', `/remy/queries/${id}`),
+  scrapeRemyQuery: (id) => request('POST', `/remy/queries/${id}/scrape`),
+
+  // Remy — tasks
+  listRemyTasks: () => request('GET', '/remy/tasks'),
+  createRemyTask: (body) => request('POST', '/remy/tasks', body),
+  getRemyTask: (id) => request('GET', `/remy/tasks/${id}`),
+  updateRemyTask: (id, body) => request('PUT', `/remy/tasks/${id}`, body),
+  deleteRemyTask: (id) => request('DELETE', `/remy/tasks/${id}`),
+  runRemyTask: (id) => request('POST', `/remy/tasks/${id}/run`),
+
+  // Remy — runs
+  listRemyRuns: (params = {}) => {
+    const qs = new URLSearchParams(params).toString();
+    return request('GET', `/remy/runs${qs ? `?${qs}` : ''}`);
+  },
+
+  // Remy — listings
+  listRemyListings: (params = {}) => {
+    const qs = new URLSearchParams(params).toString();
+    return request('GET', `/remy/listings${qs ? `?${qs}` : ''}`);
+  },
+  getRemyListing: (id, refresh = false) => request('GET', `/remy/listings/${id}${refresh ? '?refresh=true' : ''}`),
+  importRemyListing: (id) => request('POST', `/remy/listings/${id}/import`),
+
+  // Remy — analysis & recommendations
+  analyzeRemy: (queryId) => request('POST', `/remy/analyze/${queryId}`),
+  recommendRemy: (queryId) => request('POST', `/remy/recommend/${queryId}`),
+  listRemyReports: (params = {}) => {
+    const qs = new URLSearchParams(params).toString();
+    return request('GET', `/remy/reports${qs ? `?${qs}` : ''}`);
+  },
+  getRemyReport: (id) => request('GET', `/remy/reports/${id}`),
+
+  // Remy — memory
+  getRemyMemory: () => request('GET', '/remy/memory'),
+  clearRemyMemory: () => request('DELETE', '/remy/memory'),
+
+  // Remy — chat
+  listRemyThreads: () => request('GET', '/remy/chat/threads'),
+  getRemyThread: (id) => request('GET', `/remy/chat/${id}`),
+  deleteRemyThread: (id) => request('DELETE', `/remy/chat/${id}`),
+  streamRemyChat: (message, threadId, onEvent) => {
+    return new Promise((resolve, reject) => {
+      const controller = new AbortController();
+      const promise = fetch(`${BASE}/remy/chat`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message, thread_id: threadId || null }),
+        signal: controller.signal,
+      });
+
+      let fullText = '';
+      let thread = threadId;
+
+      (async () => {
+        try {
+          const res = await promise;
+          if (!res.ok) {
+            const data = await res.json().catch(() => ({}));
+            reject(new Error(data.detail || `HTTP ${res.status}`));
+            return;
+          }
+          const reader = res.body.getReader();
+          const decoder = new TextDecoder();
+          let buffer = '';
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            buffer += decoder.decode(value, { stream: true });
+            const parts = buffer.split('\n\n');
+            buffer = parts.pop();
+            for (const part of parts) {
+              const line = part.trim();
+              if (!line.startsWith('data: ')) continue;
+              let event;
+              try {
+                event = JSON.parse(line.slice(6));
+              } catch {
+                continue;
+              }
+              if (event.type === 'meta') thread = event.thread_id;
+              if (event.type === 'delta') {
+                fullText += event.content;
+                onEvent({ type: 'delta', content: event.content, thread_id: thread });
+              } else if (event.type === 'done') {
+                onEvent({ type: 'done', thread_id: thread });
+              } else if (event.type === 'error') {
+                onEvent({ type: 'error', detail: event.detail, thread_id: thread });
+              }
+            }
+          }
+          if (buffer.trim().startsWith('data: ')) {
+            try {
+              const event = JSON.parse(buffer.trim().slice(6));
+              if (event.type === 'delta') fullText += event.content;
+              onEvent(event);
+            } catch { /* ignore trailing partial */ }
+          }
+          resolve({ thread_id: thread, text: fullText });
+        } catch (err) {
+          if (err.name === 'AbortError') reject(err);
+          else reject(err);
+        }
+      })();
+
+      promise.cancel = () => controller.abort();
+    });
+  },
 };
 
 export default api;

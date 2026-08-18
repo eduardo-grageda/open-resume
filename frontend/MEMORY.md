@@ -36,7 +36,13 @@ frontend/
         ├── PositionsPage.jsx  # List positions grouped by company, create/delete
         ├── PositionPage.jsx   # Single position: 3 tabs (JD, Tailored CV, Export)
         ├── SearchJobsPage.jsx # Web job search with filters, results, import flow
-        └── StarPage.jsx       # STAR interview prep: achievement Q&A chat, story review/editor, saved stories list
+        ├── StarPage.jsx       # STAR interview prep: achievement Q&A chat, story review/editor, saved stories list
+        ├── RemyPage.jsx       # Remy dashboard: schedule status + recent activity + SSE streaming chat panel
+        ├── RemyQueriesPage.jsx   # Search profile CRUD with city management (add/remove cities, radius slider)
+        ├── RemyTasksPage.jsx     # Scheduled tasks list + RemyTaskForm (frequency, day/time, run now)
+        ├── RemyListingsPage.jsx  # Listings browser with filters + split-pane detail + Import to Position
+        ├── RemyReportsPage.jsx   # Reports viewer with top-match scores + run analysis/recommend buttons
+        └── RemyMemoryPage.jsx    # Profile view, CV change timeline, market signals, memory clear
 ```
 
 ## Design System (`App.css`)
@@ -48,6 +54,7 @@ frontend/
 ## API Client (`api.js`)
 - Base URL: `/api`
 - Methods: `health`, `getSettings`, `updateSettings`, `testLlm`, `getCv`, `updateCv`, `ingestPdf`, `onboardStart`, `onboardAnswer`, `onboardConfirm`, `onboardProgress`, `listPositions`, `getPosition`, `createPosition`, `updatePosition`, `deletePosition`, `adaptPosition`, `exportMarkdownUrl`, `exportPdfUrl`, `searchJobs`, `getSearchSources`, `extractJd`, `starStart`, `starAnswer`, `starConfirm`, `listStarStories`, `getStarStory`, `updateStarStory`, `deleteStarStory`, `generateStarPitch`
+- Remy methods: `getRemySources`, `listRemyQueries`, `createRemyQuery`, `getRemyQuery`, `updateRemyQuery`, `deleteRemyQuery`, `scrapeRemyQuery`, `listRemyTasks`, `createRemyTask`, `getRemyTask`, `updateRemyTask`, `deleteRemyTask`, `runRemyTask`, `listRemyRuns`, `listRemyListings`, `getRemyListing`, `importRemyListing`, `analyzeRemy`, `recommendRemy`, `listRemyReports`, `getRemyReport`, `getRemyMemory`, `clearRemyMemory`, `listRemyThreads`, `getRemyThread`, `deleteRemyThread`, `streamRemyChat(message, threadId, onEvent)` — SSE streaming via fetch with ReadableStream parser
 - Handles JSON serialization, error extraction from response body
 
 ## Pages
@@ -115,7 +122,8 @@ frontend/
 
 ### Layout
 - Fixed sidebar (220px) with brand "Open Resume"
-- NavLink items: Dashboard, Base CV, Onboarding, Interview Prep, Positions, Search Jobs (highlighted when active)
+- NavLink items: Dashboard, Base CV, Onboarding, Interview Prep, Positions, Search Jobs
+- Remy Agent section (with separator): Remy Dashboard, Queries, Tasks, Listings, Reports, Memory
 - Settings link at bottom
 - Main content area with left margin offset
 
@@ -161,3 +169,40 @@ frontend/
 - Reusable loading indicator with animated spinner and optional text
 - Used by all pages instead of blank `return null` during data fetches
 - Props: `text` (default: "Loading...")
+
+## Remy Pages (Phase 5)
+
+### RemyPage (`/remy`)
+- Dashboard: status card (profile count, task count, listing count, recent runs with status badges)
+- Full chat panel: thread list for switching/creating conversations, message history with react-markdown rendering, streaming text with typing indicator, input with Enter-to-send
+- `streamRemyChat()` SSE helper: reads `ReadableStream`, parses `data:` JSON events, yields `{type, content/thread_id/detail}` via callback
+
+### RemyQueriesPage (`/remy/queries`)
+- List search profiles with keywords, cities, source info
+- CRUD form: name, keywords (comma-sep), exclude keywords, sources, experience level dropdown, remote checkbox
+- `CityForm` sub-component: city name, country (2-letter), lat/lng inputs, radius slider (1-200 km)
+- Multi-city support: add/remove cities, must have at least one
+- "Scrape now" button per query triggers ad-hoc scraper
+
+### RemyTasksPage (`/remy/tasks`)
+- `RemyTaskForm` component: profile dropdown (loaded from queries), task type select (scrape/analyze/recommend), frequency (daily/weekly), conditional weekday select (Sun-Sat), time picker, enabled checkbox
+- List tasks with type badge, frequency, schedule display, disabled indicator
+- "Run now" button triggers manual execution, "Edit" opens inline form
+
+### RemyListingsPage (`/remy/listings`)
+- Filter bar: text search, source select, query/profile select, active/expired filter, "unseen only" checkbox
+- Split-pane: left listing list (scrollable, click to select), right detail panel
+- Detail: title, company, location, salary, source badge, link to original URL, rendered markdown description
+- "Import to Position" button: creates Position from listing, sets `imported_position_id`, links to `/positions/:id`
+- "Refresh" button re-fetches listing detail from source
+
+### RemyReportsPage (`/remy/reports`)
+- "Run Analysis" / "Run Recommendations" buttons
+- Split-pane: left report list by type/date, right detail panel
+- Detail: report type, timestamp, top matches list (score/100 + reason, each links to listings), rendered markdown content
+
+### RemyMemoryPage (`/remy/memory`)
+- Profile card: role, snapshot count, tracked runs, preferences
+- Market signals card: top skill badges from analysis runs, last updated
+- CV Change History: timeline with dots/lines, each entry shows name + snapshot date + skill/position counts
+- Clear Memory button with confirmation

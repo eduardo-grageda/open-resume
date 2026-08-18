@@ -12,9 +12,12 @@ logger = logging.getLogger(__name__)
 MEMORY_DIR = DATA_DIR / "remy" / "memory"
 PROFILE_PATH = MEMORY_DIR / "profile.json"
 RUNS_INDEX_PATH = MEMORY_DIR / "runs_index.json"
+CV_HISTORY_DIR = MEMORY_DIR / "cv_history"
+CV_HISTORY_INDEX_PATH = MEMORY_DIR / "cv_history.index.json"
 
 MAX_RUNS_INDEX = 200
 MAX_TOP_SKILLS = 25
+MAX_CV_HISTORY = 100
 
 _memory: Optional["RemyMemory"] = None
 
@@ -41,6 +44,7 @@ class RemyMemory:
 
     def __init__(self) -> None:
         MEMORY_DIR.mkdir(parents=True, exist_ok=True)
+        CV_HISTORY_DIR.mkdir(parents=True, exist_ok=True)
 
     # --- low-level file helpers ---
 
@@ -131,4 +135,132 @@ class RemyMemory:
                 "market_signals": {"top_skills": [], "updated_at": _now()},
             },
         )
+        for path in CV_HISTORY_DIR.glob("*.json"):
+            try:
+                path.unlink()
+            except OSError:
+                pass
+        self._write_json(CV_HISTORY_INDEX_PATH, [])
         logger.info("Remy memory cleared")
+
+    # --- CV chronicler (snapshots + deltas + profile) ---
+
+    async def snapshot_cv(self, cv: dict) -> dict | None:
+        """Snapshot a CV save. Returns None if unchanged from the latest snapshot."""
+        cv_id = cv.get("id") or ""
+        name = " ".join(
+            [
+                (cv.get("personal_info") or {}).get("first_name", ""),
+                (cv.get("personal_info") or {}).get("last_name", ""),
+            ]
+        ).strip() or "CV"
+        signature = {
+            "cv_id": cv_id,
+            "name": name,
+            "updated_at": cv.get("updated_at", ""),
+            "skills_count": len(cv.get("skills") or []),
+            "career_count": len(cv.get("career") or []),
+            "role": name,
+        }
+        timestamp = _now()
+
+        index = self._read_json(CV_HISTORY_INDEX_PATH, [])
+        if index and index[0].get("signature") == signature:
+            return None
+
+        stamp = timestamp.replace(":", "-").replace(".", "-")
+        snapshot = {
+            "timestamp": timestamp,
+            "signature": signature,
+            "cv": cv,
+        }
+        self._write_json(CV_HISTORY_DIR / f"{stamp}.json", snapshot)
+
+        index.insert(0, {"timestamp": timestamp, "signature": signature, "file": f"{stamp}.json"})
+        self._write_json(CV_HISTORY_INDEX_PATH, index[:MAX_CV_HISTORY])
+        for stale in index[MAX_CV_HISTORY:]:
+            path = CV_HISTORY_DIR / stale.get("file", "")
+            if path.exists():
+                try:
+                    path.unlink()
+                except OSError:
+                    pass
+
+        await self._update_profile_from_cv(cv)
+        logger.info("CV snapshot %s saved (%d total)", stamp, len(index[:MAX_CV_HISTORY]))
+        return {"timestamp": timestamp, "signature": signature}
+
+    async def list_cv_history(self, limit: int = 100) -> list[dict]:
+        index = self._read_json(CV_HISTORY_INDEX_PATH, [])
+        return index[: max(1, min(limit, MAX_CV_HISTORY))]
+
+    async def get_cv_snapshot(self, filename: str) -> dict | None:
+        if "/" in filename or ".." in filename:
+            return None
+        path = CV_HISTORY_DIR / filename
+        if not path.exists():
+            return None
+        return self._read_json(path, None)
+
+    async def _update_profile_from_cv(self, cv: dict) -> None:
+        profile = await self.get_profile()
+        personal = cv.get("personal_info") or {}
+        first = personal.get("first_name", "")
+        last = personal.get("last_name", "")
+        name = " ".join([first, last]).strip()
+        if name and name != profile.get("role"):
+            profile["role"] = name
+        career = cv.get("career") or []
+        latest_role = ""
+        if career and career[0].get("role"):
+            latest_role = career[0]["role"]
+        entry = {"timestamp": _now(), "latest_role": latest_role, "skills_count": len(cv.get("skills") or []), "career_count": len(career)}
+        profile.setdefault("skills_timeline", []).insert(0, entry)
+        profile["skills_timeline"] = profile["skills_timeline"][:50]
+        await self._save_profile(profile)
+
+    # --- chat threads ---
+
+    def list_threads(self) -> list[dict]:
+        entries = []
+        for path in sorted(MEMORY_DIR.glob("chat_*.json")):
+            try:
+                data = self._read_json(path, None)
+                if not data:
+                    continue
+                entries.append({
+                    "thread_id": data.get("thread_id", ""),
+                    "title": data.get("title", ""),
+                    "updated_at": data.get("updated_at", ""),
+                    "message_count": len(data.get("messages") or []),
+                })
+            except Exception:
+                continue
+        return entries
+
+    def get_thread(self, thread_id: str) -> dict | None:
+        if not thread_id or "/" in thread_id or ".." in thread_id:
+            return None
+        path = MEMORY_DIR / f"chat_{thread_id}.json"
+        return self._read_json(path, None)
+
+    def save_thread(self, thread_id: str, messages: list[dict], title: str = "") -> None:
+        existing = self.get_thread(thread_id) or {}
+        self._write_json(
+            MEMORY_DIR / f"chat_{thread_id}.json",
+            {
+                "thread_id": thread_id,
+                "title": title or existing.get("title", ""),
+                "messages": messages,
+                "updated_at": _now(),
+            },
+        )
+
+    def delete_thread(self, thread_id: str) -> bool:
+        if not thread_id or "/" in thread_id or ".." in thread_id:
+            return False
+        path = MEMORY_DIR / f"chat_{thread_id}.json"
+        if not path.exists():
+            return False
+        path.unlink()
+        return True

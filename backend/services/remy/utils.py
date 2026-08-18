@@ -25,8 +25,8 @@ async def polite_sleep(config: AppConfig) -> None:
         await asyncio.sleep(delay)
 
 
-async def fetch_text(url: str, *, timeout: float = 30.0, headers: Optional[dict] = None) -> str:
-    """GET a page and return its text body. Raises RuntimeError on failure."""
+async def fetch_text(url: str, *, timeout: float = 30.0, headers: Optional[dict] = None, cookies: Optional[dict] = None) -> str:
+    """Fetch a page and return its text body. Optionally reuse cookies across calls."""
     merged = {
         "User-Agent": USER_AGENT,
         "Accept": BROWSER_ACCEPT,
@@ -34,7 +34,7 @@ async def fetch_text(url: str, *, timeout: float = 30.0, headers: Optional[dict]
     }
     if headers:
         merged.update(headers)
-    async with httpx.AsyncClient(timeout=timeout, follow_redirects=True) as client:
+    async with httpx.AsyncClient(timeout=timeout, follow_redirects=True, cookies=cookies) as client:
         try:
             resp = await client.get(url, headers=merged)
             resp.raise_for_status()
@@ -95,6 +95,26 @@ def normalize_url(url: str) -> str:
         query.append(pair)
     clean = parsed._replace(query="&".join(query), fragment="").geturl()
     return clean.rstrip("/")
+
+
+async def fetch_text_get_cookies(
+    url: str, *, timeout: float = 30.0, headers: Optional[dict] = None
+) -> tuple[str, httpx.Cookies]:
+    """Fetch a page and return (text, cookies) for session reuse."""
+    merged: dict[str, str] = {
+        "User-Agent": USER_AGENT,
+        "Accept": BROWSER_ACCEPT,
+        "Accept-Language": "es-MX,es;q=0.9,en;q=0.8",
+    }
+    if headers:
+        merged.update(headers)
+    async with httpx.AsyncClient(timeout=timeout, follow_redirects=True) as client:
+        try:
+            resp = await client.get(url, headers=merged)
+            resp.raise_for_status()
+        except httpx.HTTPError as e:
+            raise RuntimeError(f"Failed to fetch {url}: {e}") from e
+    return resp.text, resp.cookies
 
 
 def slugify(text: str) -> str:

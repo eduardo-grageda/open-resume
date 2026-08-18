@@ -83,6 +83,33 @@ class LLMClient:
             )
         return content
 
+    async def chat_stream(
+        self,
+        messages: list[dict[str, str]],
+        system: Optional[str] = None,
+        temperature: float = 0.7,
+        max_tokens: int = 4096,
+    ):
+        """Stream chat completions, yielding text deltas."""
+        full_messages: list[dict[str, str]] = []
+        if system:
+            full_messages.append({"role": "system", "content": system})
+        full_messages.extend(messages)
+
+        stream = await self.client.chat.completions.create(
+            model=self.model,
+            messages=full_messages,
+            temperature=temperature,
+            max_tokens=max_tokens,
+            stream=True,
+        )
+        async for chunk in stream:
+            if not chunk.choices:
+                continue
+            delta = chunk.choices[0].delta
+            if delta and delta.content:
+                yield delta.content
+
     async def chat_json(
         self,
         messages: list[dict[str, str]],

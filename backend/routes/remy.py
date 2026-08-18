@@ -1,13 +1,15 @@
 from __future__ import annotations
 
+import json
 import logging
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException
+from fastapi.responses import StreamingResponse
 
 from backend.config import load_config
 from backend.database import get_storage, StorageBackend
-from backend.models import RemyQuery, RemyQueryInput, RemyRun, RemyTask, RemyTaskInput, _now
+from backend.models import Position, RemyQuery, RemyQueryInput, RemyRun, RemyTask, RemyTaskInput, _now
 
 logger = logging.getLogger(__name__)
 
@@ -376,3 +378,113 @@ async def get_run(run_id: str, storage: StorageBackend = Depends(_get_storage)):
     if run is None:
         raise HTTPException(status_code=404, detail="Run not found")
     return {"run": run.model_dump()}
+
+
+# ── Chat (conversational agent) ──────────────────────────────────────────────
+
+
+@router.post("/chat")
+async def chat(body: dict):
+    _require_remy_enabled()
+    message = (body.get("message") or "").strip()
+    thread_id = (body.get("thread_id") or "").strip() or None
+    if not message:
+        raise HTTPException(status_code=400, detail="message is required")
+
+    from backend.services.remy.chat import stream_chat
+
+    async def event_stream():
+        async for event in stream_chat(message, thread_id=thread_id):
+            yield f"data: {json.dumps(event)}\n\n"
+
+    return StreamingResponse(
+        event_stream(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
+
+
+@router.get("/chat/threads")
+async def chat_threads():
+    _require_remy_enabled()
+    from backend.services.remy.chat import list_threads
+
+    return {"threads": list_threads()}
+
+
+@router.get("/chat/{thread_id}")
+async def get_chat_thread(thread_id: str):
+    _require_remy_enabled()
+    from backend.services.remy.chat import get_thread
+
+    thread = get_thread(thread_id)
+    if thread is None:
+        raise HTTPException(status_code=404, detail="Thread not found")
+    return {"thread": thread}
+
+
+@router.delete("/chat/{thread_id}")
+async def delete_chat_thread(thread_id: str):
+    _require_remy_enabled()
+    from backend.services.remy.chat import delete_thread
+
+    if not delete_thread(thread_id):
+        raise HTTPException(status_code=404, detail="Thread not found")
+    return {"ok": True}
+
+
+# ── Memory ───────────────────────────────────────────────────────────────────
+
+
+@router.get("/memory")
+async def get_memory():
+    _require_remy_enabled()
+    from backend.services.remy.memory import get_remy_memory
+
+    memory = get_remy_memory()
+    return {
+        "profile": await memory.get_profile(),
+        "cv_history": await memory.list_cv_history(),
+        "recent_runs": await memory.list_recent_runs(),
+    }
+
+
+@router.delete("/memory")
+async def clear_memory():
+    _require_remy_enabled()
+    from backend.services.remy.memory import get_remy_memory
+
+    await get_remy_memory().clear()
+    return {"ok": True}
+
+
+# ── Import listing as Position ───────────────────────────────────────────────
+
+
+@router.post("/listings/{listing_id}/import")
+async def import_listing_as_position(listing_id: str, storage: StorageBackend = Depends(_get_storage)):
+    _require_remy_enabled()
+    listing = await storage.get_remy_listing(listing_id)
+    if listing is None:
+        raise HTTPException(status_code=404, detail="Listing not found")
+    if listing.imported_position_id:
+        raise HTTPException(status_code=400, detail=f"Already imported as position {listing.imported_position_id}")
+
+    description = listing.description_md.strip()
+    if not description:
+        description = f"**{listing.title}** at {listing.company}\n\nSee original: {listing.url}"
+
+    position = Position(
+        company_name=listing.company or "",
+        job_title=listing.title or "",
+        job_description_md=description,
+        job_source_url=listing.url,
+        job_source_type=listing.source or "remy",
+        status="new",
+    )
+    await storage.save_position(position)
+
+    listing.imported_position_id = position.id
+    await storage.save_remy_listing(listing)
+
+    return {"position": position.model_dump(), "listing_id": listing_id}

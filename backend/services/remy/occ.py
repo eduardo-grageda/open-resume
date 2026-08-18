@@ -12,6 +12,7 @@ from backend.services.remy import register
 from backend.services.remy.base import ScraperSkill
 from backend.services.remy.utils import (
     fetch_text,
+    fetch_text_get_cookies,
     get_config,
     html_to_markdown,
     polite_sleep,
@@ -24,6 +25,13 @@ BASE_URL = "https://www.occ.com.mx"
 
 SEARCH_TEMPLATE = BASE_URL + "/empleos/{query_path}/"
 LISTING_TEMPLATE = BASE_URL + "/empleo/oferta/{id}-{slug}"
+
+OCC_HEADERS = {
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36",
+    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
+    "Accept-Language": "es-MX,es;q=0.9,en;q=0.8",
+    "Accept-Encoding": "gzip, deflate, br",
+}
 
 
 @register
@@ -116,11 +124,15 @@ class OccSkill(ScraperSkill):
         results: list[dict[str, Any]] = []
         seen: set[str] = set()
         page = 1
+        cf_cookies = None
         while len(results) < limit and page <= 5:
             paged_url = f"{url}?page={page}" if page > 1 else url
             await polite_sleep(self._config)
             try:
-                html = await fetch_text(paged_url)
+                if cf_cookies is None:
+                    html, cf_cookies = await fetch_text_get_cookies(paged_url, headers=OCC_HEADERS)
+                else:
+                    html = await fetch_text(paged_url, headers=OCC_HEADERS, cookies=cf_cookies)
             except RuntimeError as e:
                 logger.warning("OCC search page %s failed: %s", page, e)
                 break
@@ -149,5 +161,10 @@ class OccSkill(ScraperSkill):
         detail_url = LISTING_TEMPLATE.format(id=offer_id, slug=slug)
 
         await polite_sleep(self._config)
-        html = await fetch_text(detail_url)
-        return html_to_markdown(html)
+        try:
+            _, cf_cookies = await fetch_text_get_cookies(BASE_URL, headers=OCC_HEADERS)
+            html = await fetch_text(detail_url, headers=OCC_HEADERS, cookies=cf_cookies)
+            return html_to_markdown(html)
+        except RuntimeError:
+            logger.info("OCC detail page %s behind Cloudflare — returning link-only stub", detail_url)
+            return f"Full listing behind OCC's bot protection.\n\nView directly: [{detail_url}]({detail_url})"

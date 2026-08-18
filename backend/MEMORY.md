@@ -18,7 +18,7 @@ backend/
 │   ├── positions.py     # CRUD /api/positions, adapt, export md/pdf
 │   ├── search.py        # POST /api/search/jobs, GET /api/search/sources, POST /api/search/extract-jd
 │   ├── star.py          # POST /api/star/start, /answer, /confirm, GET/PUT/DELETE /api/star/stories
-│   └── remy.py          # GET /api/remy/sources, CRUD /api/remy/queries
+│   └── remy.py          # Remy routes: sources, queries, tasks, runs, listings, reports, analyze/recommend, chat (SSE), memory, import listing→position
 ├── services/
 │   ├── llm.py            # LLMClient wrapping openai SDK (AsyncOpenAI)
 │   ├── onboarding.py     # OnboardingService: session state machine, prompt templates, answer processing, extracted→BaseCV conversion
@@ -27,7 +27,8 @@ backend/
 │   ├── star.py           # StarService: STAR interview prep, achievement identification, S/T/A/R Q&A, pitch generation
 │   ├── remy/             # Remy agent: base.py (ScraperSkill ABC), __init__.py (skill registry),
 │   │                     #   utils.py, occ.py, linkedin.py, aggregator.py, scraper.py, scheduler.py,
-│   │                     #   vectordb.py, prompts.py, analyzer.py, recommender.py, subagents.py, memory.py
+│   │                     #   vectordb.py, prompts.py, analyzer.py, recommender.py, subagents.py,
+│   │                     #   memory.py, chat.py
 │   └── __init__.py
 └── requirements.txt
 ```
@@ -80,10 +81,10 @@ backend/
 
 **CV (`routes/cv.py`)**
 - `GET /api/cv` — returns CV or `{exists: false}`
-- `PUT /api/cv` — full replace of base CV
+- `PUT /api/cv` — full replace of base CV, triggers Remy CV snapshot if enabled
 - `POST /api/cv/onboard/start` — begins AI-guided onboarding, returns first question
 - `POST /api/cv/onboard/answer` — processes answer, returns next question or completion
-- `POST /api/cv/onboard/confirm` — finalizes extracted data to BaseCV, saves, deletes session
+- `POST /api/cv/onboard/confirm` — finalizes extracted data to BaseCV, saves, triggers snapshot, deletes session
 - `GET /api/cv/onboard/progress/{session_id}` — returns section progress and extracted data
 - `POST /api/cv/ingest-pdf` — upload PDF, extract text via pdfplumber, parse with LLM, return structured BaseCV
 - `POST /api/cv/ingest-pdf/confirm` — save parsed CV after user review
@@ -121,6 +122,10 @@ backend/
 - `GET /api/remy/queries/{id}` — single query
 - `PUT /api/remy/queries/{id}` — update (preserves id/created_at)
 - `DELETE /api/remy/queries/{id}` — delete
+- `POST /api/remy/queries/{id}/scrape` — manual trigger: run all enabled skills, dedup, persist Run + stats
+- `GET /api/remy/listings` — browse (`?source=`, `?query_id=`, `?active=`, `?new=`, `?search=`, `?limit=`, `?offset=`)
+- `GET /api/remy/listings/{id}` — detail, optional `?refresh=true` re-fetches from source
+- `POST /api/remy/listings/{id}/import` — create Position from listing, set `imported_position_id`
 - `GET /api/remy/tasks` — list cron tasks
 - `POST /api/remy/tasks` — create (validates query_id exists, 422 on bad frequency/time/day_of_week); schedules job
 - `GET /api/remy/tasks/{id}` — single task
@@ -133,6 +138,12 @@ backend/
 - `POST /api/remy/recommend/{query_id}` — run recommendations, returns `{run, report}` (502 on failure)
 - `GET /api/remy/reports` — report history (`?query_id=`, `?limit=`, `?offset=`, newest first)
 - `GET /api/remy/reports/{id}` — single report
+- `POST /api/remy/chat` — SSE streaming conversational agent (`{message, thread_id?}` → SSE `data:` events)
+- `GET /api/remy/chat/threads` — list saved chat threads
+- `GET /api/remy/chat/{thread_id}` — resume thread (returns messages array)
+- `DELETE /api/remy/chat/{thread_id}` — delete thread
+- `GET /api/remy/memory` — profile + CV change history + recent tracked runs
+- `DELETE /api/remy/memory` — clear all memory (profile, CV history, run index)
 - All routes return 404 when `REMY_ENABLED=false`
 
 ### Services
@@ -142,6 +153,7 @@ backend/
 - `test_connection()` — quick chat call to verify API key
 - `chat()` — full chat completion with system prompt, temperature, max_tokens
 - `chat_json()` — chat with JSON response_format, auto-retries on empty/malformed responses (up to 2 retries, doubles max_tokens on `length` errors), returns `(result, retries)` tuple
+- `chat_stream()` — streaming chat completion, async generator yielding text deltas via `AsyncOpenAI` streaming API
 - `embed(texts, model)` — embeddings via OpenAI-compatible endpoint (used by Remy vectordb when `REMY_EMBEDDING_MODEL` is set)
 
 **Onboarding (`services/onboarding.py`)**
@@ -198,7 +210,9 @@ backend/
 - `analyzer.py` — `RemyAnalyzer`: market-trend + skills-gap report. Embeds active query listings, gets CV vector, selects 15 nearest in vector space (falls back to query keywords vector if no CV), LLM JSON → `content_md` + `top_skills`; vector-only fallback report when LLM unavailable. `run_analysis(storage, query, run)` helper updates the `RemyRun` and records memory. Returns `AnalysisResult(report, listings_considered, top_skills)`.
 - `recommender.py` — `RemyRecommender`: two-pass scoring — pass 1 vector similarity narrows to top 20 candidates, pass 2 LLM scores 0-100 with one-sentence reasons (fallback: relative vector scores). Returns `RecommendationResult(report, listings_considered)`; `run_recommendation(storage, query, run)` helper updates the `RemyRun` + memory.
 - `subagents.py` — sub-agent registry (`SUBAGENTS`: `analyst`, `recommender` specs with handler functions), `get_subagent(name)`, `run_subagent(name, query, storage)` dispatch — the entry point future deepagents `task` tools will call.
-- `memory.py` — `RemyMemory` (singleton via `get_remy_memory()`): JSON under `data/remy/memory/` — `profile.json` (role, skills_timeline, preferences, `market_signals.top_skills` merged after analysis runs) and `runs_index.json` (last 200 runs: run_id, report_id, report_type, query_id, top_listing_ids). `record_run()`, `update_market_signals()`, `list_recent_runs()`, `clear()`. CV snapshot/delta history lands with `cv-chronicler` in the agent phase.
+- `memory.py` — `RemyMemory` (singleton via `get_remy_memory()`): JSON under `data/remy/memory/` — `profile.json` (role, skills_timeline, preferences, `market_signals.top_skills` merged after analysis runs) and `runs_index.json` (last 200 runs). CV chronicler: `snapshot_cv(cv)` saves timestamped JSON in `cv_history/` + `cv_history.index.json` (max 100), `_update_profile_from_cv()` auto-updates profile on each CV save, `list_cv_history()`, `get_cv_snapshot()`, `clear()`. Chat threads: `list_threads()`, `get_thread()`, `save_thread()`, `delete_thread()` stored as `chat_{id}.json`.
+- `chat.py` — Conversational agent: `stream_chat()` async generator builds context from CV + queries + listings + reports + memory profile, streams LLM response via SSE `{type:"meta"|"delta"|"done"|"error"}` events, saves thread history on completion. `list_threads()`, `get_thread()`, `delete_thread()` wrappers.
+- `prompts.py` — `AGENT_SYSTEM_PROMPT` (main conversational Remy persona), `ANALYST_SYSTEM_PROMPT`, `RECOMMENDER_SYSTEM_PROMPT`, message builders.
 
 ### Main (`main.py`)
 - FastAPI app with CORS (localhost:5173)
@@ -206,5 +220,5 @@ backend/
 - `GET /api/health` — status, has_cv, storage backend info
 
 ### Not Yet Implemented
-- Remy Phase 5–7: frontend pages, chat endpoint (deepagents), import-as-position, Mongo unique indexes/politeness polish, topic suggestions — see `REMY_PHASES.md` and root `MEMORY.md`
+- Remy Phase 6–7: Mongo unique indexes/politeness polish, import-as-position end-to-end integration, topic suggestions, deepagents harness (Phase 1 items 10-16) — see `REMY_PHASES.md`
 - Tests, linting

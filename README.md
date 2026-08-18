@@ -10,25 +10,37 @@ An open-source, local-first web tool for managing a comprehensive base CV, searc
 - **Job Search** — search open positions across the web (SerpAPI, Brave Search)
 - **Tailored Resumes** — generate compact, job-specific CVs using AI adaptation
 - **Export** — download tailored CVs as Markdown or PDF
+- **Remy Agent** — AI job-hunting assistant that searches OCC, LinkedIn, and SerpAPI on a schedule, analyzes market trends, and scores listings against your CV
+- **STAR Interview Prep** — build structured STAR stories from your CV and generate 2-minute interview pitches
 - **Local-First** — all data stored locally in JSON files (or optional MongoDB)
 - **Multi-Provider** — works with OpenRouter, OpenAI, or any OpenAI-compatible API
 
 ## Quick Start
 
+> **Platform note:** Currently supported on Linux only. The Windows install script (`install.ps1`) is pending a fix — contributions welcome.
+
 ### Prerequisites
 
+- Linux (Ubuntu/Debian recommended)
 - Python 3.10+
 - Node.js 18+
 - npm
+- `build-essential` and system libraries for PDF export (`libpango-1.0-0`, `libpangoft2-1.0-0`, `libffi-dev`, `libgdk-pixbuf2.0-0`, `libxml2`, `libxslt1.1`)
+
+Install system dependencies (Ubuntu/Debian):
+
+```bash
+sudo apt install -y python3 python3-venv python3-pip nodejs npm \
+  libpango-1.0-0 libpangoft2-1.0-0 libffi-dev libgdk-pixbuf2.0-0 libxml2 libxslt1.1
+```
 
 ### Setup
 
 **Automated (recommended):**
 
 ```bash
-chmod +x install.sh && ./install.sh      # Linux / macOS
-# or
-powershell -ExecutionPolicy Bypass -File install.ps1   # Windows
+chmod +x install.sh && ./install.sh      # Linux
+# powershell -ExecutionPolicy Bypass -File install.ps1   # Windows (pending fix)
 ```
 
 The script checks prerequisites, creates a virtual environment, installs all dependencies, and creates `.env` from the template.
@@ -42,7 +54,7 @@ cd open-resume
 
 # Set up backend
 python -m venv venv
-source venv/bin/activate  # Windows: venv\Scripts\activate
+source venv/bin/activate
 pip install -r backend/requirements.txt
 
 # Set up frontend
@@ -125,7 +137,31 @@ Enter keywords and optionally set filters (location, remote, experience level, d
 
 Click **Import** on any result to scrape the job description and create a position entry.
 
-### 4. Manage Positions (`/positions`)
+### 4. Remy Agent — Automated Job Hunting (`/remy`)
+
+Remy is a scheduled AI agent that continuously searches for jobs, analyzes market trends, and recommends the best-matching positions — all without manual intervention.
+
+**Search Queries** (`/remy/queries`): Define what Remy should search for — keywords, cities, sources. Each query can target multiple job boards simultaneously:
+- **OCC Mundial** — direct HTML parser for occ.com.mx (Mexican job board)
+- **LinkedIn** — public job listings via RSS/guest API
+- **SerpAPI / Brave** — aggregator wrapping the general web search provider
+
+**Scheduled Tasks** (`/remy/tasks`): Set up daily or weekly cron jobs to:
+- **Scrape** — run search queries across enabled sources and collect new listings
+- **Analyze** — generate market-trend and skills-gap reports by comparing listings against your base CV
+- **Recommend** — two-pass match scoring: vector similarity narrows candidates, then AI reasoning scores each listing 0–100 with personalized reasons
+
+**Listings Browser** (`/remy/listings`): Browse all collected job listings with filters. Each listing shows the full job description extracted and cleaned by Remy. Import listings as positions for one-click CV adaptation.
+
+**Reports** (`/remy/reports`): Review market analysis reports with top in-demand skills and gap assessments. Recommendation reports show the best matches with detailed reasons.
+
+**Memory** (`/remy/memory`): Your CV change history timeline with automatic snapshots, tracked runs, and the evolving profile Remy builds from your preferences.
+
+The `/remy` dashboard shows the full picture — active queries, scheduled tasks, recent runs (with timestamps, counts, and per-source error details), and the latest collected listings.
+
+Enable Remy with `REMY_ENABLED=true` in `.env` (enabled by default). The scheduler starts automatically when the backend boots.
+
+### 5. Manage Positions (`/positions`)
 
 Positions follow a **Company → Job Description → Tailored CV** hierarchy.
 
@@ -133,7 +169,7 @@ Positions follow a **Company → Job Description → Tailored CV** hierarchy.
 - **Add from URL** — scrape a job listing URL (AI extracts the JD)
 - **Import from Search** — from the search results page
 
-### 5. Generate Tailored CVs
+### 6. Generate Tailored CVs
 
 Open a position, go to the **Tailored CV** tab, and click **Generate Tailored CV**.
 
@@ -141,7 +177,7 @@ The AI reads your base CV and the job description, then produces a compact, role
 
 A change summary explains what was emphasized, de-emphasized, and why.
 
-### 6. Export
+### 7. Export
 
 From the **Export** tab on any position page:
 - **Download Markdown** — `.md` file
@@ -159,6 +195,12 @@ From the **Export** tab on any position page:
 | `MONGO_URI` | `mongodb://localhost:27017` | MongoDB connection string |
 | `SEARCH_PROVIDER` | `serpapi` | Search provider (`serpapi` or `brave`) |
 | `SEARCH_API_KEY` | — | Search API key |
+| `REMY_ENABLED` | `true` | Enable the Remy agent and its scheduler |
+| `REMY_SOURCES` | `places,linkedin,occ,serpapi` | Comma-separated enabled sources |
+| `REMY_REQUEST_DELAY` | `2.0` | Delay between requests (politeness, seconds) |
+| `REMY_TZ` | server local | Timezone for scheduled tasks (e.g. `America/Mexico_City`) |
+| `REMY_EMBEDDING_MODEL` | — | Embedding model for vector similarity (falls back to local feature-hashing) |
+| `GOOGLE_PLACES_API_KEY` | — | Google Places API key for company discovery (optional) |
 | `DATA_DIR` | `data` | Directory for JSON storage |
 | `HOST` | `0.0.0.0` | Listen address |
 | `PORT` | `8000` | Backend port |
@@ -184,13 +226,16 @@ open-resume/
 │   ├── config.py            # Configuration loader
 │   ├── models.py            # Pydantic data models
 │   ├── database/            # Storage backends (JSON, MongoDB)
-│   ├── routes/              # API routes (CV, positions, search, settings)
+│   ├── routes/              # API routes (CV, positions, search, settings, remy, star)
 │   └── services/            # Business logic (LLM, onboarding, adapter, search)
+│       └── remy/            # Remy agent (skills, scraper, scheduler, analyzer, recommender, vector DB)
 ├── frontend/
 │   └── src/
 │       ├── pages/           # React pages
 │       └── components/      # Reusable components
 ├── data/                    # Runtime data (gitignored)
+├── install.sh               # Linux install script
+├── install.ps1              # Windows install script (pending fix)
 ├── docker-compose.yml       # Docker services
 └── PLAN.md                  # Development plan
 ```

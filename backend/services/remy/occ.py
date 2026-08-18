@@ -1,18 +1,17 @@
 from __future__ import annotations
 
+import asyncio
 import logging
 import re
 from typing import Any
-from urllib.parse import urlencode
 
 from bs4 import BeautifulSoup
+from curl_cffi import requests as cffi_requests
 
 from backend.models import RemyQuery
 from backend.services.remy import register
 from backend.services.remy.base import ScraperSkill
 from backend.services.remy.utils import (
-    fetch_text,
-    fetch_text_get_cookies,
     get_config,
     html_to_markdown,
     polite_sleep,
@@ -32,6 +31,36 @@ OCC_HEADERS = {
     "Accept-Language": "es-MX,es;q=0.9,en;q=0.8",
     "Accept-Encoding": "gzip, deflate, br",
 }
+
+# Browser TLS/HTTP2 fingerprint to impersonate. OCC's Cloudflare config
+# serves 403 "scraping abuse" to httpx-style clients regardless of headers
+# or cookies; curl_cffi spoofs a real Chrome fingerprint and passes.
+IMPERSONATE = "chrome"
+
+_CHALLENGE_MARKERS = ("just a moment", "challenge-platform", "__cf_chl", "cf_chl_opt", "turnstile")
+
+
+def _is_challenge(text: str, status_code: int) -> bool:
+    if status_code in (403, 429):
+        return True
+    lowered = text[:4000].lower()
+    return any(marker in lowered for marker in _CHALLENGE_MARKERS)
+
+
+async def _get_impersonated(session: Any, url: str) -> str:
+    """GET a URL through a curl_cffi session with a browser fingerprint.
+
+    If Cloudflare escalates to an interactive Turnstile challenge this
+    raises RuntimeError; manual intervention then means solving the
+    challenge in a real browser and exporting its cookies (not wired in).
+    """
+    def _run() -> str:
+        resp = session.get(url, headers=OCC_HEADERS)
+        if _is_challenge(resp.text, resp.status_code):
+            raise RuntimeError(f"OCC bot challenge on {url} (HTTP {resp.status_code})")
+        return resp.text
+
+    return await asyncio.to_thread(_run)
 
 
 @register
@@ -124,31 +153,31 @@ class OccSkill(ScraperSkill):
         results: list[dict[str, Any]] = []
         seen: set[str] = set()
         page = 1
-        cf_cookies = None
-        while len(results) < limit and page <= 5:
-            paged_url = f"{url}?page={page}" if page > 1 else url
-            await polite_sleep(self._config)
-            try:
-                if cf_cookies is None:
-                    html, cf_cookies = await fetch_text_get_cookies(paged_url, headers=OCC_HEADERS)
-                else:
-                    html = await fetch_text(paged_url, headers=OCC_HEADERS, cookies=cf_cookies)
-            except RuntimeError as e:
-                logger.warning("OCC search page %s failed: %s", page, e)
-                break
-            page_cards = self._parse_cards(html)
-            if not page_cards:
-                break
-            new = 0
-            for item in page_cards:
-                if item["url"] in seen:
-                    continue
-                seen.add(item["url"])
-                results.append(item)
-                new += 1
-            if new < len(page_cards) and len(page_cards) > 0:
-                break
-            page += 1
+        session = cffi_requests.Session(impersonate=IMPERSONATE, timeout=30.0)
+        try:
+            while len(results) < limit and page <= 5:
+                paged_url = f"{url}?page={page}" if page > 1 else url
+                await polite_sleep(self._config)
+                try:
+                    html = await _get_impersonated(session, paged_url)
+                except RuntimeError as e:
+                    logger.warning("OCC search page %s failed: %s", page, e)
+                    break
+                page_cards = self._parse_cards(html)
+                if not page_cards:
+                    break
+                new = 0
+                for item in page_cards:
+                    if item["url"] in seen:
+                        continue
+                    seen.add(item["url"])
+                    results.append(item)
+                    new += 1
+                if new < len(page_cards) and len(page_cards) > 0:
+                    break
+                page += 1
+        finally:
+            session.close()
 
         return results[:limit]
 
@@ -161,10 +190,13 @@ class OccSkill(ScraperSkill):
         detail_url = LISTING_TEMPLATE.format(id=offer_id, slug=slug)
 
         await polite_sleep(self._config)
+        session = cffi_requests.Session(impersonate=IMPERSONATE, timeout=30.0)
         try:
-            _, cf_cookies = await fetch_text_get_cookies(BASE_URL, headers=OCC_HEADERS)
-            html = await fetch_text(detail_url, headers=OCC_HEADERS, cookies=cf_cookies)
-            return html_to_markdown(html)
-        except RuntimeError:
-            logger.info("OCC detail page %s behind Cloudflare — returning link-only stub", detail_url)
-            return f"Full listing behind OCC's bot protection.\n\nView directly: [{detail_url}]({detail_url})"
+            try:
+                html = await _get_impersonated(session, detail_url)
+                return html_to_markdown(html)
+            except RuntimeError:
+                logger.info("OCC detail page %s behind Cloudflare — returning link-only stub", detail_url)
+                return f"Full listing behind OCC's bot protection.\n\nView directly: [{detail_url}]({detail_url})"
+        finally:
+            session.close()

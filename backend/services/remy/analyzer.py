@@ -155,6 +155,8 @@ class RemyAnalyzer:
         top_matches = [
             RemyTopMatch(
                 listing_id=listing.id,
+                listing_title=listing.title or "",
+                listing_company=listing.company or "",
                 score=_relative_score(sim, max_sim),
                 reason=f"Vector similarity {sim:.2f}",
             )

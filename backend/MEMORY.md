@@ -8,6 +8,7 @@ backend/
 ├── config.py            # AppConfig model, env/file loader, save
 ├── models.py            # All Pydantic v2 schemas
 ├── migrate.py           # JSON ↔ MongoDB data migration script
+├── open-resume-backend.spec  # PyInstaller build config
 ├── database/
 │   ├── __init__.py      # StorageBackend ABC + factory (get_storage)
 │   ├── json_store.py    # Full JSON file-based storage implementation
@@ -58,7 +59,7 @@ backend/
 - `RemyListing` — one scraped job posting: source, query_id, title, company, location, url (dedup key), salary, description_md, posted_date, first_seen_at, last_seen_at, is_active, embedding_id, imported_position_id
 - `RemyTask` (+ `RemyTaskInput`) — cronjob: query_id, type (scrape|analyze|recommend), frequency (daily|weekly — validated at model level), day_of_week (0-6, weekly only), time (HH:MM — validated at model level), enabled
 - `RemyRun` — execution record: task_id, trigger (cron|manual), status (running|success|failed|partial), started_at, finished_at, listings_found, new_listings, error, log
-- `RemyReport` — persisted AI output: run_id, query_id, type (analysis|recommendation), content_md, top_matches (`RemyTopMatch`: listing_id, score 0-100, reason)
+- `RemyReport` — persisted AI output: run_id, query_id, type (analysis|recommendation), content_md, top_matches (`RemyTopMatch`: listing_id, listing_title, listing_company, score 0-100, reason)
 
 ### Storage (`database/`)
 - `StorageBackend` ABC: get_cv, save_cv, get_config, save_config, list_positions, get_position, save_position, delete_position, get/save/delete onboarding sessions, get/save/delete star sessions, list/get/save/delete star stories
@@ -218,7 +219,17 @@ backend/
 - FastAPI app with CORS (localhost:5173)
 - Registers settings, cv, positions, search, star, remy routers
 - `GET /api/health` — status, has_cv, storage backend info
+- `POST /api/shutdown` — graceful shutdown via SIGTERM
+- Standalone mode (`__name__ == "__main__"`): argparse `--port` (0=auto), `--data-dir`; platform data dir (`~/.local/share/open-resume/` Linux, `%APPDATA%\open-resume\` Windows); `PORT=<n>` stdout; SIGTERM/SIGINT handlers; `uvicorn.run()` on `127.0.0.1`
+- Import mode (`uvicorn backend.main:app`): no CLI parsing, defaults to `DATA_DIR=./data`, no stdout PORT= line
 
 ### Not Yet Implemented
 - Remy Phase 6–7: Mongo unique indexes/politeness polish, import-as-position end-to-end integration, topic suggestions, deepagents harness (Phase 1 items 10-16) — see `REMY_PHASES.md`
+- Desktop Phases 4–6: Integration & lifecycle, build pipeline, polish — see `DESKTOP_PLAN.md`
 - Tests, linting
+
+### Desktop Bundling (Phase 3 — Complete)
+- `backend/open-resume-backend.spec` — PyInstaller spec: onefile mode, `pathex=['..']` for package resolution, comprehensive hiddenimports (uvicorn, fastapi, pydantic, weasyprint, apscheduler, pymongo, python_multipart, etc.), curl_cffi dynamic libs collected, excludes for tkinter/pip/setuptools. Built binary: 74MB.
+- `scripts/build-backend.sh` (Linux) — builds via `pyinstaller --clean --noconfirm backend/open-resume-backend.spec`, copies binary to `src-tauri/binaries/open-resume-backend-x86_64-unknown-linux-gnu`.
+- `scripts/build-backend.ps1` (Windows) — equivalent PowerShell script, copies to `src-tauri/binaries/open-resume-backend-x86_64-pc-windows-msvc.exe`.
+- Verified: binary starts, prints `PORT=<n>`, responds to `/api/health` (`{"status":"ok","has_cv":false,"storage":"json"}`), creates data directories, shuts down cleanly via `/api/shutdown`.

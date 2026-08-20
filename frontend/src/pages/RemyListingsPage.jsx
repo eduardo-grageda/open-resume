@@ -1,10 +1,11 @@
 import { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useParams } from 'react-router-dom';
 import ReactMarkdown from 'react-markdown';
 import api from '../api';
 import LoadingSpinner from '../components/LoadingSpinner';
 
 export default function RemyListingsPage() {
+  const { id: paramId } = useParams();
   const [listings, setListings] = useState([]);
   const [sources, setSources] = useState([]);
   const [queries, setQueries] = useState([]);
@@ -23,8 +24,14 @@ export default function RemyListingsPage() {
         setQueries(d2.queries || []);
       })
       .catch(() => {});
-    loadListings({});
-  }, []);
+    const initial = {};
+    if (paramId) {
+      api.getRemyListing(paramId)
+        .then((data) => { setSelected(data.listing); setSelectedDetail(data.listing); })
+        .catch(() => {});
+    }
+    loadListings(initial);
+  }, [paramId]);
 
   async function loadListings(overrides) {
     setLoading(true);

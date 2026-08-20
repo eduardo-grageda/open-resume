@@ -1,0 +1,21 @@
+[package]
+name = "open-resume"
+version = "0.1.0"
+description = "Open Resume - AI-powered CV manager and job hunter"
+authors = ["Open Resume"]
+edition = "2021"
+
+[lib]
+name = "open_resume_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = ["tray-icon", "devtools"] }
+tauri-plugin-shell = "2"
+tauri-plugin-process = "2"
+tauri-plugin-single-instance = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"

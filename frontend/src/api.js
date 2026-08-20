@@ -1,4 +1,7 @@
-const BASE = '/api';
+const BACKEND_URL = window.__BACKEND_URL__ ||
+  (window.__BACKEND_PORT__ ? `http://127.0.0.1:${window.__BACKEND_PORT__}` : '');
+
+const BASE = BACKEND_URL ? `${BACKEND_URL}/api` : '/api';
 
 async function request(method, path, body) {
   const opts = {

@@ -278,6 +278,8 @@ class RemyRun(BaseModel):
 
 class RemyTopMatch(BaseModel):
     listing_id: str = ""
+    listing_title: str = ""
+    listing_company: str = ""
     score: int = 0
     reason: str = ""
 

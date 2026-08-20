@@ -162,9 +162,13 @@ export default function RemyReportsPage() {
                       {detail.top_matches.map((m) => (
                         <div key={m.listing_id} className="flex-between" style={{ gap: '1rem' }}>
                           <div className="text-sm">
-                            <strong>{m.score}/100</strong> — {m.reason}
+                            <strong>{m.score}/100</strong>
+                            {m.listing_title ? ` — ${m.listing_title}` : ''}
+                            {m.listing_company ? ` at ${m.listing_company}` : ''}
+                            <br />
+                            <span className="text-secondary">{m.reason}</span>
                           </div>
-                          <Link to="/remy/listings" className="btn btn-secondary btn-sm" style={{ flexShrink: 0 }}>Listing</Link>
+                          <Link to={`/remy/listings/${m.listing_id}`} className="btn btn-secondary btn-sm" style={{ flexShrink: 0 }}>View Listing</Link>
                         </div>
                       ))}
                     </div>

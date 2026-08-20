@@ -66,6 +66,7 @@ export default function App() {
         <Route path="/remy/queries" element={<RemyQueriesPage />} />
         <Route path="/remy/tasks" element={<RemyTasksPage />} />
         <Route path="/remy/listings" element={<RemyListingsPage />} />
+        <Route path="/remy/listings/:id" element={<RemyListingsPage />} />
         <Route path="/remy/reports" element={<RemyReportsPage />} />
         <Route path="/remy/memory" element={<RemyMemoryPage />} />
         <Route path="*" element={<Navigate to="/" replace />} />

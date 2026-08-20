@@ -52,7 +52,8 @@ frontend/
 - Utility classes: `.grid-2`, `.inline-row`, `.flex-between`, spacing and text helpers
 
 ## API Client (`api.js`)
-- Base URL: `/api`
+- Base URL: `/api` (Vite proxy) or `http://127.0.0.1:{PORT}/api` (Tauri desktop, detected via `window.__BACKEND_PORT__`)
+- Supports `window.__BACKEND_URL__` override for custom backend URLs
 - Methods: `health`, `getSettings`, `updateSettings`, `testLlm`, `getCv`, `updateCv`, `ingestPdf`, `onboardStart`, `onboardAnswer`, `onboardConfirm`, `onboardProgress`, `listPositions`, `getPosition`, `createPosition`, `updatePosition`, `deletePosition`, `adaptPosition`, `exportMarkdownUrl`, `exportPdfUrl`, `searchJobs`, `getSearchSources`, `extractJd`, `starStart`, `starAnswer`, `starConfirm`, `listStarStories`, `getStarStory`, `updateStarStory`, `deleteStarStory`, `generateStarPitch`
 - Remy methods: `getRemySources`, `listRemyQueries`, `createRemyQuery`, `getRemyQuery`, `updateRemyQuery`, `deleteRemyQuery`, `scrapeRemyQuery`, `listRemyTasks`, `createRemyTask`, `getRemyTask`, `updateRemyTask`, `deleteRemyTask`, `runRemyTask`, `listRemyRuns`, `listRemyListings`, `getRemyListing`, `importRemyListing`, `analyzeRemy`, `recommendRemy`, `listRemyReports`, `getRemyReport`, `getRemyMemory`, `clearRemyMemory`, `listRemyThreads`, `getRemyThread`, `deleteRemyThread`, `streamRemyChat(message, threadId, onEvent)` — SSE streaming via fetch with ReadableStream parser
 - Handles JSON serialization, error extraction from response body

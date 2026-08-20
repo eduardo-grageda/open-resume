@@ -148,6 +148,8 @@ class RemyRecommender:
                 top_matches.append(
                     RemyTopMatch(
                         listing_id=listing.id,
+                        listing_title=listing.title or "",
+                        listing_company=listing.company or "",
                         score=_relative_score(sim, max_sim),
                         reason=_fallback_reason(sim, listing),
                     )
@@ -158,6 +160,8 @@ class RemyRecommender:
                 top_matches.append(
                     RemyTopMatch(
                         listing_id=listing.id,
+                        listing_title=listing.title or "",
+                        listing_company=listing.company or "",
                         score=_relative_score(sim, max_sim),
                         reason=_fallback_reason(sim, listing),
                     )
@@ -204,7 +208,14 @@ class RemyRecommender:
             reason = str(item.get("reason", "")).strip()
             if not reason:
                 reason = f"Score {score} — {by_id[lid].title} at {by_id[lid].company}"
-            matches.append(RemyTopMatch(listing_id=lid, score=score, reason=reason))
+            listing = by_id[lid]
+            matches.append(RemyTopMatch(
+                listing_id=lid,
+                listing_title=listing.title or "",
+                listing_company=listing.company or "",
+                score=score,
+                reason=reason,
+            ))
             seen.add(lid)
         matches.sort(key=lambda m: m.score, reverse=True)
         return matches[:PASS2_TOP]
@@ -234,8 +245,8 @@ class RemyRecommender:
             company = (listing.company or "") if listing else ""
             url = ""
             if listing and listing.url:
-                url = f" ([link]({listing.url}))"
-            lines.append(f"**{i}. {title}** — {company} — Score: {match.score}/100{url}")
+                url = f" ([original]({listing.url}))"
+            lines.append(f"**{i}. {title}** — {company} — Score: {match.score}/100 ([view in app](/remy/listings/{match.listing_id})){url}")
             lines.append(f"> {match.reason}")
             lines.append("")
         return "\n".join(lines)

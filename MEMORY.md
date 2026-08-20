@@ -10,6 +10,13 @@
 **Phase 6 (MongoDB & Docker):** Complete  
 **Phase 7 (Polish):** Complete
 
+**Desktop Phase 1 (Tauri v2 Setup):** Complete — `src-tauri/` scaffolded, Rust 1.97, `@tauri-apps/cli` v2.11.4, `cargo check` passes. Frontend adapted for Tauri compat (dynamic backend URL, `strictPort`, `clearScreen`).
+**Desktop Phase 2 (Backend Adaptations):** Complete — `backend/main.py` supports `--port` (dynamic port binding with `PORT=<n>` stdout), `--data-dir` (platform data dir: `~/.local/share/open-resume/` on Linux, `%APPDATA%\open-resume\` on Windows), SIGTERM/SIGINT graceful shutdown, `/api/shutdown` endpoint, `uvicorn.run()` in standalone mode.
+**Desktop Phase 3 (PyInstaller Bundling):** Complete — `backend/open-resume-backend.spec` builds a 74MB standalone `open-resume-backend` binary with all Python deps (FastAPI, uvicorn, weasyprint, curl_cffi, pymongo, etc.). `scripts/build-backend.sh` (Linux) and `scripts/build-backend.ps1` (Windows) automate the build. Binary outputs `PORT=<n>` to stdout, binds to dynamic/fixed port, writes data to `--data-dir`, responds to `/api/health` and `/api/shutdown`. Verified end-to-end: startup (~8s extraction), health check, settings endpoint, clean shutdown.
+**Desktop Phase 4 (Integration & Lifecycle):** Complete — `src-tauri/src/lib.rs` implements full sidecar lifecycle: spawns `open-resume-backend`, reads `PORT=<n>` from stdout, polls `/api/health` via raw TCP, injects `window.__BACKEND_PORT__` into webview, kills sidecar on `CloseRequested`. Dev mode fallback when sidecar binary not found.
+**Desktop Phase 5 (Build Pipeline):** Complete — `scripts/build-desktop.sh` (Linux) and `scripts/build-desktop.ps1` (Windows) orchestrate full build (backend PyInstaller → frontend Vite → Tauri cargo build). `.github/workflows/desktop-release.yml` CI/CD for tagged releases and manual triggers, targeting `x86_64-unknown-linux-gnu` (Ubuntu) and `x86_64-pc-windows-msvc` (Windows). Linux system deps (libwebkit2gtk, GTK3, etc.) documented. `tauri-action@v0` used for automated Tauri bundling.
+**Desktop Phase 6 (Polish):** Complete — App icon generated (1024×1024 `app-icon.png`, `cargo tauri icon` produced `.ico`, `.icns`, multi-size PNGs including Windows `StoreLogo` and `Square*` variants). `tauri.conf.json` extended with `bundle` config (Linux `.deb` with webkit2gtk+gtk3 deps, Windows `.msi` via WiX), `maximized: true`, `visible: false` (hidden on start). Single-instance enforcement via `tauri-plugin-single-instance` (focus existing window on second launch). Full native menu bar: File (Close Window, Quit), Edit (Undo, Redo, Cut, Copy, Paste, Select All), View (Reload, Toggle DevTools), Help (About Open Resume). Splash screen (`frontend/public/splash.html`) — 420×320 centered frameless window with loading spinner and status text, shown while backend sidecar starts. On backend success: splash closes, main window shows. On failure: splash displays error message with Close button. `Cargo.toml` updated with `tray-icon` feature and `tauri-plugin-single-instance` dep. Capabilities updated for splash window.
+
 **Remy Phase 1 (Agent Foundation):** Mostly complete (models/storage/config/skills/registry; agent harness pending)  
 **Remy Phase 2 (Scraper Skills & Search Database):** Mostly complete (skills + listings DB; places skill + ChromaDB pending)  
 **Remy Phase 3 (Cronjobs):** Complete  
@@ -18,8 +25,11 @@
 
 ### What exists
 
+- `src-tauri/` — Tauri v2 Rust project: `Cargo.toml`, `build.rs`, `src/main.rs`, `src/lib.rs`, `tauri.conf.json`, `capabilities/default.json`, placeholder `icons/icon.png`. Shell + process plugins configured. Sidecar scope for `open-resume-backend`.
+- `src-tauri/binaries/` — PyInstaller-built backend sidecar (74MB onefile binary, gitignored).
+- `scripts/` — Build automation: `build-backend.sh` (Linux) and `build-backend.ps1` (Windows) for PyInstaller bundling.
 - `backend/` — FastAPI app with CORS, health endpoint, config loader, settings routes, CV CRUD routes, positions CRUD routes, LLM client, JSON storage backend, MongoDB storage adapter, Pydantic v2 models, migration script.
-- `frontend/` — React 18 + Vite 5 app with react-router-dom v6, react-markdown v9. Six pages (Home, Settings, CV Editor, Positions list, Position detail), Layout with sidebar nav, MdEditor split-pane component, api.js fetch wrapper. Builds clean. Dockerfile for containerized dev.
+- `frontend/` — React 18 + Vite 5 app with react-router-dom v6, react-markdown v9. Six pages (Home, Settings, CV Editor, Positions list, Position detail), Layout with sidebar nav, MdEditor split-pane component, api.js fetch wrapper. Builds clean. Dockerfile for containerized dev. **Tauri compat**: `api.js` detects `window.__BACKEND_PORT__` for dynamic backend URL, `vite.config.js` has `strictPort` + `clearScreen`, `@tauri-apps/cli` in devDeps.
 - `data/` — runtime directory (gitignored) for config, CV, positions, exports, onboarding sessions, star sessions, star stories, and Remy agent state (`data/remy/`).
 - `PLAN.md` — full architecture, data models, API routes, implementation phases.
 - `AGENTS.md` — tech stack, commands, conventions, commit format.

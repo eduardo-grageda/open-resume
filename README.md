@@ -106,6 +106,76 @@ docker compose up -d
 
 Open **http://localhost:5173**.
 
+## Desktop App (Tauri)
+
+Open Resume can be built as a standalone desktop application for Linux and Windows using Tauri v2. The app bundles the React frontend in a native webview window and spawns the Python backend as a sidecar process.
+
+### Prerequisites (Desktop Build)
+
+All standard prerequisites plus:
+
+- **Rust** 1.77+ — [rustup.rs](https://rustup.rs)
+- **Linux system libraries** for WebKitGTK:
+
+```bash
+sudo apt install -y \
+  libwebkit2gtk-4.1-dev libgtk-3-dev libcairo2-dev \
+  libpango1.0-dev libgdk-pixbuf-2.0-dev libsoup-3.0-dev \
+  libjavascriptcoregtk-4.1-dev librsvg2-dev \
+  libayatana-appindicator3-dev pkg-config
+```
+
+- **PyInstaller** — installed automatically by the build script
+
+### Build
+
+**Linux:**
+
+```bash
+# Build backend binary
+bash scripts/build-backend.sh
+
+# Build full desktop app (backend + frontend + Tauri)
+bash scripts/build-desktop.sh
+```
+
+**Windows (PowerShell):**
+
+```powershell
+powershell -File scripts/build-desktop.ps1
+```
+
+This produces:
+- Backend: `src-tauri/binaries/open-resume-backend-<target-triple>[.exe]` (74 MB standalone Python binary)
+- Frontend: `frontend/dist/` (static Vite build)
+- Desktop bundle: `src-tauri/target/release/bundle/` — `.deb` and `.AppImage` (Linux) or `.msi` (Windows)
+
+### Dev Mode
+
+Run the backend separately, then launch the Tauri dev window:
+
+```bash
+# Terminal 1 — backend
+source venv/bin/activate && uvicorn backend.main:app --port 8000
+
+# Terminal 2 — Tauri dev
+cd frontend && npm run tauri:dev
+```
+
+In dev mode the frontend loads from the Vite dev server (`localhost:5173`) and proxies API calls to the backend. The splash screen also loads from Vite's dev server.
+
+### Architecture
+
+```
+Tauri (Rust) window
+├── React/Vite frontend (static or Vite dev server)
+│   └── api.js → dynamic backend URL (window.__BACKEND_PORT__)
+└── Sidecar: open-resume-backend (PyInstaller binary)
+    └── FastAPI on 127.0.0.1:<dynamic port>
+```
+
+On launch, Tauri spawns the backend sidecar, reads the port from stdout, polls `/api/health`, then shows the main window. Closing the app terminates the backend. A single-instance plugin prevents duplicate launches.
+
 ## Usage Guide
 
 ### 1. Configure AI Provider (`/settings`)

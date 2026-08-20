@@ -1,10 +1,58 @@
 from __future__ import annotations
 
 import logging
+import os
+import signal
+import sys
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger("open-resume")
+
+
+if __name__ == "__main__":
+    import argparse
+    import socket
+
+    def _find_free_port():
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+            s.bind(("127.0.0.1", 0))
+            return s.getsockname()[1]
+
+    def _get_app_data_dir() -> Path:
+        if sys.platform == "linux":
+            base = Path(os.environ.get("XDG_DATA_HOME", Path.home() / ".local/share"))
+        elif sys.platform == "win32":
+            base = Path(os.environ.get("APPDATA", Path.home() / "AppData/Roaming"))
+        elif sys.platform == "darwin":
+            base = Path.home() / "Library" / "Application Support"
+        else:
+            base = Path.cwd()
+        return base / "open-resume"
+
+    _parser = argparse.ArgumentParser(description="Open Resume backend")
+    _parser.add_argument("--port", type=int, default=0, help="0 = find free port")
+    _parser.add_argument("--data-dir", type=str, default=None, help="Data directory path")
+    _cli_args = _parser.parse_args()
+
+    if _cli_args.data_dir:
+        os.environ["DATA_DIR"] = str(Path(_cli_args.data_dir).resolve())
+    else:
+        os.environ["DATA_DIR"] = str(_get_app_data_dir())
+
+    _port = _cli_args.port if _cli_args.port > 0 else _find_free_port()
+    print(f"PORT={_port}", flush=True)
+
+    def _shutdown(signum, frame):
+        sys.exit(0)
+
+    signal.signal(signal.SIGTERM, _shutdown)
+    signal.signal(signal.SIGINT, _shutdown)
+
 
 from backend.config import load_config
 from backend.database import get_storage
@@ -14,9 +62,6 @@ from backend.routes.remy import router as remy_router
 from backend.routes.search import router as search_router
 from backend.routes.settings import router as settings_router
 from backend.routes.star import router as star_router
-
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger("open-resume")
 
 
 @asynccontextmanager
@@ -54,7 +99,13 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
+    allow_origins=[
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+        "tauri://localhost",
+        "https://tauri.localhost",
+        "http://tauri.localhost",
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -77,3 +128,15 @@ async def health():
         "has_cv": cv is not None,
         "storage": (await storage.get_config()).storage_backend,
     }
+
+
+@app.post("/api/shutdown")
+async def api_shutdown():
+    os.kill(os.getpid(), signal.SIGTERM)
+    return {"status": "shutting_down"}
+
+
+if __name__ == "__main__":
+    import uvicorn
+
+    uvicorn.run(app, host="127.0.0.1", port=_port)

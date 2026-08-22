@@ -1,7 +1,8 @@
-const BACKEND_URL = window.__BACKEND_URL__ ||
-  (window.__BACKEND_PORT__ ? `http://127.0.0.1:${window.__BACKEND_PORT__}` : '');
-
-const BASE = BACKEND_URL ? `${BACKEND_URL}/api` : '/api';
+function getBase() {
+  const backendUrl = window.__BACKEND_URL__ ||
+    (window.__BACKEND_PORT__ ? `http://127.0.0.1:${window.__BACKEND_PORT__}` : '');
+  return backendUrl ? `${backendUrl}/api` : '/api';
+}
 
 async function request(method, path, body) {
   const opts = {
@@ -12,7 +13,7 @@ async function request(method, path, body) {
     opts.body = JSON.stringify(body);
   }
 
-  const res = await fetch(`${BASE}${path}`, opts);
+  const res = await fetch(`${getBase()}${path}`, opts);
   const data = await res.json();
 
   if (!res.ok) {
@@ -38,7 +39,7 @@ export const api = {
   ingestPdf: (file) => {
     const form = new FormData();
     form.append('file', file);
-    return fetch(`${BASE}/cv/ingest-pdf`, { method: 'POST', body: form }).then(r => {
+    return fetch(`${getBase()}/cv/ingest-pdf`, { method: 'POST', body: form }).then(r => {
       if (!r.ok) return r.json().then(d => { throw new Error(d.detail || 'Upload failed'); });
       return r.json();
     });
@@ -61,8 +62,8 @@ export const api = {
   updatePosition: (id, body) => request('PUT', `/positions/${id}`, body),
   deletePosition: (id) => request('DELETE', `/positions/${id}`),
   adaptPosition: (id) => request('POST', `/positions/${id}/adapt`),
-  exportMarkdownUrl: (id) => `${BASE}/positions/${id}/export/md`,
-  exportPdfUrl: (id) => `${BASE}/positions/${id}/export/pdf`,
+  exportMarkdownUrl: (id) => `${getBase()}/positions/${id}/export/md`,
+  exportPdfUrl: (id) => `${getBase()}/positions/${id}/export/pdf`,
 
   // Search
   searchJobs: (body) => request('POST', '/search/jobs', body),
@@ -133,7 +134,7 @@ export const api = {
   streamRemyChat: (message, threadId, onEvent) => {
     return new Promise((resolve, reject) => {
       const controller = new AbortController();
-      const promise = fetch(`${BASE}/remy/chat`, {
+      const promise = fetch(`${getBase()}/remy/chat`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ message, thread_id: threadId || null }),

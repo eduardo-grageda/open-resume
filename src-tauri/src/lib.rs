@@ -13,6 +13,7 @@ use tauri_plugin_shell::ShellExt;
 struct BackendState {
     port: u16,
     child: Option<tauri_plugin_shell::process::CommandChild>,
+    backend_ready: bool,
 }
 
 fn check_health(port: u16) -> bool {
@@ -89,12 +90,12 @@ fn spawn_backend(app: &tauri::AppHandle) -> Result<u16, String> {
     }
 
     let mut healthy = false;
-    for _ in 0..30 {
+    for _ in 0..60 {
         if check_health(port) {
             healthy = true;
             break;
         }
-        std::thread::sleep(Duration::from_millis(200));
+        std::thread::sleep(Duration::from_millis(500));
     }
 
     if !healthy {
@@ -103,7 +104,13 @@ fn spawn_backend(app: &tauri::AppHandle) -> Result<u16, String> {
         if let Some(child) = bs.child.take() {
             let _ = child.kill();
         }
-        return Err("Backend service is not responding after 30 retries".to_string());
+        return Err("Backend service is not responding after 60 retries".to_string());
+    }
+
+    {
+        let state = app.state::<Mutex<BackendState>>();
+        let mut bs = state.lock().unwrap();
+        bs.backend_ready = true;
     }
 
     Ok(port)
@@ -114,11 +121,6 @@ fn kill_backend(state: &Mutex<BackendState>) {
     if let Some(child) = bs.child.take() {
         let _ = child.kill();
     }
-}
-
-fn update_splash_status(splash: &tauri::WebviewWindow, text: &str) {
-    let _ =
-        splash.eval(&format!("document.getElementById('status').textContent = '{}';", text));
 }
 
 fn show_splash_error(splash: &tauri::WebviewWindow, msg: &str) {
@@ -190,6 +192,7 @@ pub fn run() {
         .manage(Mutex::new(BackendState {
             port: 0,
             child: None,
+            backend_ready: false,
         }))
         .setup(|app| {
             let menu = build_menu(app)?;
@@ -223,18 +226,37 @@ pub fn run() {
                             if let Some(splash) =
                                 sh2.get_webview_window("splash")
                             {
-                                update_splash_status(&splash, "Ready");
                                 let _ = splash.close();
                             }
-                            if let Some(main) =
-                                sh2.get_webview_window("main")
+
+                            let main_url = if cfg!(debug_assertions) {
+                                format!("http://localhost:5173/?port={}", port)
+                            } else {
+                                "index.html".to_string()
+                            };
+
+                            let init_script =
+                                format!("window.__BACKEND_PORT__ = {};", port);
+
+                            match tauri::WebviewWindowBuilder::new(
+                                &sh2,
+                                "main",
+                                tauri::WebviewUrl::App(main_url.into()),
+                            )
+                            .title("Open Resume")
+                            .inner_size(1200.0, 800.0)
+                            .min_inner_size(1024.0, 700.0)
+                            .center()
+                            .maximized(true)
+                            .initialization_script(&init_script)
+                            .build()
                             {
-                                let _ = main.eval(&format!(
-                                    "window.__BACKEND_PORT__ = {};",
-                                    port
-                                ));
-                                let _ = main.show();
-                                let _ = main.set_focus();
+                                Ok(main) => {
+                                    let _ = main.set_focus();
+                                }
+                                Err(e) => {
+                                    eprintln!("Failed to create main window: {}", e);
+                                }
                             }
                         });
                     }
@@ -276,8 +298,13 @@ pub fn run() {
             if let tauri::WindowEvent::CloseRequested { .. } = event {
                 match window.label().as_ref() {
                     "splash" => {
-                        kill_backend(&window.state::<Mutex<BackendState>>());
-                        std::process::exit(0);
+                        let state = window.state::<Mutex<BackendState>>();
+                        let bs = state.lock().unwrap();
+                        if !bs.backend_ready {
+                            drop(bs);
+                            kill_backend(&state);
+                            std::process::exit(0);
+                        }
                     }
                     "main" => {
                         kill_backend(&window.state::<Mutex<BackendState>>());

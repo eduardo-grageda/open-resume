@@ -210,6 +210,7 @@ class MongoStore(StorageBackend):
         is_active: Optional[bool] = None,
         search: Optional[str] = None,
         new_only: bool = False,
+        archived: Optional[bool] = None,
         limit: int = 100,
         offset: int = 0,
     ) -> list[RemyListing]:
@@ -223,6 +224,8 @@ class MongoStore(StorageBackend):
             query["query_id"] = query_id
         if is_active is not None:
             query["is_active"] = is_active
+        if archived is not None:
+            query["archived"] = archived
         if search:
             pattern = {"$regex": search, "$options": "i"}
             query["$or"] = [{"title": pattern}, {"company": pattern}]
@@ -258,6 +261,17 @@ class MongoStore(StorageBackend):
         col = await self._collection("remy_listings")
         listing.last_seen_at = _now()
         await col.replace_one({"id": listing.id}, listing.model_dump(), upsert=True)
+
+    async def delete_remy_listing(self, listing_id: str) -> bool:
+        col = await self._collection("remy_listings")
+        result = await col.delete_one({"id": listing_id})
+        return result.deleted_count > 0
+
+    async def delete_all_remy_listings(self) -> int:
+        col = await self._collection("remy_listings")
+        count = await col.count_documents({})
+        await col.delete_many({})
+        return count
 
     # --- Remy Tasks ---
 

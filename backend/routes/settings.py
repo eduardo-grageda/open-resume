@@ -42,6 +42,60 @@ async def update_settings(body: SettingsUpdate, storage: StorageBackend = Depend
     return {"ok": True}
 
 
+@router.post("/wipe-data")
+async def wipe_data(storage: StorageBackend = Depends(_get_storage)):
+    deleted = {
+        "positions": 0,
+        "remy_listings": 0,
+        "remy_queries": 0,
+        "remy_tasks": 0,
+        "remy_runs": 0,
+        "remy_reports": 0,
+        "star_stories": 0,
+    }
+
+    positions = await storage.list_positions()
+    for p in positions:
+        await storage.delete_position(p.id)
+    deleted["positions"] = len(positions)
+
+    deleted["remy_listings"] = await storage.delete_all_remy_listings()
+
+    queries = await storage.list_remy_queries()
+    for q in queries:
+        await storage.delete_remy_query(q.id)
+    deleted["remy_queries"] = len(queries)
+
+    tasks = await storage.list_remy_tasks()
+    for t in tasks:
+        await storage.delete_remy_task(t.id)
+    deleted["remy_tasks"] = len(tasks)
+
+    runs = await storage.list_remy_runs(limit=10000)
+    deleted["remy_runs"] = len(runs)
+
+    reports = await storage.list_remy_reports()
+    deleted["remy_reports"] = len(reports)
+
+    stories = await storage.list_star_stories()
+    for s in stories:
+        await storage.delete_star_story(s.id)
+    deleted["star_stories"] = len(stories)
+
+    cv = await storage.get_cv()
+    if cv:
+        cv_path = None
+        try:
+            from backend.config import DATA_DIR
+            cv_path = DATA_DIR / "base_cv.json"
+            if cv_path.exists():
+                cv_path.unlink()
+        except Exception:
+            pass
+
+    return {"ok": True, "deleted": deleted}
+
+
 @router.post("/test-llm")
 async def test_llm(storage: StorageBackend = Depends(_get_storage)):
     config = await storage.get_config()

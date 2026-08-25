@@ -125,6 +125,7 @@ class StorageBackend(ABC):
         is_active: Optional[bool] = None,
         search: Optional[str] = None,
         new_only: bool = False,
+        archived: Optional[bool] = None,
         limit: int = 100,
         offset: int = 0,
     ) -> list[RemyListing]:
@@ -140,6 +141,14 @@ class StorageBackend(ABC):
 
     @abstractmethod
     async def save_remy_listing(self, listing: RemyListing) -> None:
+        ...
+
+    @abstractmethod
+    async def delete_remy_listing(self, listing_id: str) -> bool:
+        ...
+
+    @abstractmethod
+    async def delete_all_remy_listings(self) -> int:
         ...
 
     # --- Remy Tasks ---

@@ -8,6 +8,7 @@ export default function SettingsPage({ onConfigSaved }) {
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState(null);
   const [message, setMessage] = useState(null);
+  const [wiping, setWiping] = useState(false);
 
   const [form, setForm] = useState({
     openrouter_api_key: '',
@@ -63,6 +64,21 @@ export default function SettingsPage({ onConfigSaved }) {
       setTestResult({ ok: false, model: err.message });
     }
     setTesting(false);
+  }
+
+  async function handleWipe() {
+    if (!confirm('Wipe ALL data? This will delete all positions, CV, listings, queries, tasks, runs, reports, and STAR stories. API keys will be preserved. This CANNOT be undone.')) return;
+    if (!confirm('Are you absolutely sure? Type "yes" in the next prompt to confirm.')) return;
+    setWiping(true);
+    setMessage(null);
+    try {
+      const data = await api.wipeData();
+      const parts = Object.entries(data.deleted).map(([k, v]) => `${k}: ${v}`);
+      setMessage({ type: 'success', text: `Data wiped. Deleted: ${parts.join(', ')}` });
+    } catch (err) {
+      setMessage({ type: 'error', text: err.message });
+    }
+    setWiping(false);
   }
 
   if (loading) return <LoadingSpinner text="Loading settings..." />;
@@ -183,7 +199,15 @@ export default function SettingsPage({ onConfigSaved }) {
         <button type="submit" className="btn btn-primary" disabled={saving}>
           {saving ? 'Saving...' : 'Save Settings'}
         </button>
-      </form>
-    </div>
+</form>
+
+        <div className="card mt-3" style={{ borderColor: '#dc2626' }}>
+          <h3 style={{ fontSize: '1rem', marginBottom: '0.5rem', color: '#dc2626' }}>Danger Zone</h3>
+          <p className="text-sm text-secondary mb-2">Permanently delete all application data. API keys will be preserved.</p>
+          <button className="btn btn-secondary" onClick={handleWipe} disabled={wiping} style={{ background: '#dc2626', color: '#fff', borderColor: '#dc2626' }}>
+            {wiping ? 'Wiping...' : 'Wipe All Data'}
+          </button>
+        </div>
+      </div>
   );
 }

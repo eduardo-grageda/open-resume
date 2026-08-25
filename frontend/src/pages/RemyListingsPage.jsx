@@ -11,11 +11,12 @@ export default function RemyListingsPage() {
   const [queries, setQueries] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [filter, setFilter] = useState({ search: '', source: '', query_id: '', active: '', new: false });
+  const [filter, setFilter] = useState({ search: '', source: '', query_id: '', active: '', new: false, archived: false });
   const [selected, setSelected] = useState(null);
   const [selectedDetail, setSelectedDetail] = useState(null);
   const [importingId, setImportingId] = useState(null);
   const [actionMsg, setActionMsg] = useState(null);
+  const [wiping, setWiping] = useState(false);
 
   useEffect(() => {
     Promise.all([api.getRemySources(), api.listRemyQueries()])
@@ -43,6 +44,7 @@ export default function RemyListingsPage() {
     if (params.query_id) qs.query_id = params.query_id;
     if (params.active !== '' && params.active !== null && params.active !== undefined) qs.active = params.active;
     if (params.new) qs.new = 'true';
+    if (params.archived) qs.archived = 'true';
     qs.limit = 200;
     try {
       const data = await api.listRemyListings(qs);
@@ -86,6 +88,64 @@ export default function RemyListingsPage() {
       setActionMsg(`Import failed: ${err.message}`);
     }
     setImportingId(null);
+  }
+
+  async function handleArchive(l) {
+    setActionMsg(null);
+    try {
+      const data = await api.archiveRemyListing(l.id);
+      setListings((prev) => prev.map((x) => (x.id === l.id ? data.listing : x)));
+      if (selected && selected.id === l.id) {
+        setSelected(data.listing);
+        setSelectedDetail(data.listing);
+      }
+    } catch (err) {
+      setActionMsg(`Archive failed: ${err.message}`);
+    }
+  }
+
+  async function handleUnarchive(l) {
+    setActionMsg(null);
+    try {
+      const data = await api.unarchiveRemyListing(l.id);
+      setListings((prev) => prev.map((x) => (x.id === l.id ? data.listing : x)));
+      if (selected && selected.id === l.id) {
+        setSelected(data.listing);
+        setSelectedDetail(data.listing);
+      }
+    } catch (err) {
+      setActionMsg(`Unarchive failed: ${err.message}`);
+    }
+  }
+
+  async function handleDelete(l) {
+    if (!confirm(`Permanently delete "${l.title}"?`)) return;
+    try {
+      await api.deleteRemyListing(l.id);
+      setListings((prev) => prev.filter((x) => x.id !== l.id));
+      if (selected && selected.id === l.id) {
+        setSelected(null);
+        setSelectedDetail(null);
+      }
+    } catch (err) {
+      setActionMsg(`Delete failed: ${err.message}`);
+    }
+  }
+
+  async function handleDeleteAll() {
+    if (!confirm('Permanently delete ALL listings? This cannot be undone. Listings can be re-scraped by re-running queries.')) return;
+    setWiping(true);
+    setActionMsg(null);
+    try {
+      const data = await api.deleteAllRemyListings();
+      setListings([]);
+      setSelected(null);
+      setSelectedDetail(null);
+      setActionMsg(`Deleted ${data.deleted} listings.`);
+    } catch (err) {
+      setActionMsg(`Delete all failed: ${err.message}`);
+    }
+    setWiping(false);
   }
 
   const detail = selectedDetail || selected;
@@ -155,8 +215,20 @@ export default function RemyListingsPage() {
             />
             Unseen only
           </label>
-          <button className="btn btn-secondary btn-sm" onClick={() => { setFilter({ search: '', source: '', query_id: '', active: '', new: false }); loadListings({ search: '', source: '', query_id: '', active: '', new: false }); }}>
+          <label className="inline-row gap-1 text-sm" style={{ cursor: 'pointer' }}>
+            <input
+              type="checkbox"
+              checked={filter.archived}
+              onChange={(e) => { setFilter({ ...filter, archived: e.target.checked }); loadListings({ archived: e.target.checked }); }}
+              style={{ width: 'auto' }}
+            />
+            Show archived
+          </label>
+          <button className="btn btn-secondary btn-sm" onClick={() => { setFilter({ search: '', source: '', query_id: '', active: '', new: false, archived: false }); loadListings({ search: '', source: '', query_id: '', active: '', new: false, archived: false }); }}>
             Reset
+          </button>
+          <button className="btn btn-secondary btn-sm" onClick={handleDeleteAll} disabled={wiping} style={{ color: '#dc2626', borderColor: '#dc2626' }}>
+            {wiping ? 'Deleting...' : 'Delete All'}
           </button>
         </div>
       </div>
@@ -176,22 +248,33 @@ export default function RemyListingsPage() {
             {listings.map((l) => (
               <div
                 key={l.id}
-                onClick={() => openListing(l)}
                 style={{
-                  padding: '0.625rem 0.75rem',
+                  padding: '0.5rem 0.75rem',
                   borderRadius: 'var(--radius)',
                   cursor: 'pointer',
                   background: selected && selected.id === l.id ? 'var(--color-bg)' : 'transparent',
+                  borderBottom: '1px solid var(--color-border)',
                 }}
               >
-                <div className="inline-row gap-1" style={{ flexWrap: 'wrap' }}>
-                  <strong className="text-sm">{l.title}</strong>
-                  {l.imported_position_id && <span className="badge badge-exported text-sm">imported</span>}
-                  {l.is_active === false && <span className="badge badge-new text-sm" style={{ background: '#fee2e2', color: '#991b1b' }}>expired</span>}
+                <div onClick={() => openListing(l)}>
+                  <div className="inline-row gap-1" style={{ flexWrap: 'wrap' }}>
+                    <strong className="text-sm">{l.title}</strong>
+                    {l.archived && <span className="badge badge-new text-sm" style={{ background: '#fef3c7', color: '#92400e' }}>archived</span>}
+                    {l.imported_position_id && <span className="badge badge-exported text-sm">imported</span>}
+                    {l.is_active === false && <span className="badge badge-new text-sm" style={{ background: '#fee2e2', color: '#991b1b' }}>expired</span>}
+                  </div>
+                  <p className="text-sm text-secondary">
+                    {l.company}{l.location ? ` — ${l.location}` : ''} · {l.source}
+                  </p>
                 </div>
-                <p className="text-sm text-secondary">
-                  {l.company}{l.location ? ` — ${l.location}` : ''} · {l.source}
-                </p>
+                <div className="inline-row gap-1" style={{ marginTop: '0.25rem' }}>
+                  {l.archived ? (
+                    <button className="btn btn-secondary btn-sm" onClick={(e) => { e.stopPropagation(); handleUnarchive(l); }} style={{ fontSize: '0.6875rem', padding: '0.125rem 0.375rem' }}>Unarchive</button>
+                  ) : (
+                    <button className="btn btn-secondary btn-sm" onClick={(e) => { e.stopPropagation(); handleArchive(l); }} style={{ fontSize: '0.6875rem', padding: '0.125rem 0.375rem' }}>Archive</button>
+                  )}
+                  <button className="btn btn-secondary btn-sm" onClick={(e) => { e.stopPropagation(); handleDelete(l); }} style={{ fontSize: '0.6875rem', padding: '0.125rem 0.375rem', color: '#dc2626' }}>Delete</button>
+                </div>
               </div>
             ))}
           </div>

@@ -32,6 +32,7 @@ export const api = {
   getSettings: () => request('GET', '/settings'),
   updateSettings: (body) => request('PUT', '/settings', body),
   testLlm: () => request('POST', '/settings/test-llm'),
+  wipeData: () => request('POST', '/settings/wipe-data'),
 
   // CV
   getCv: () => request('GET', '/cv'),
@@ -113,6 +114,10 @@ export const api = {
   },
   getRemyListing: (id, refresh = false) => request('GET', `/remy/listings/${id}${refresh ? '?refresh=true' : ''}`),
   importRemyListing: (id) => request('POST', `/remy/listings/${id}/import`),
+  deleteRemyListing: (id) => request('DELETE', `/remy/listings/${id}`),
+  deleteAllRemyListings: () => request('DELETE', '/remy/listings'),
+  archiveRemyListing: (id) => request('POST', `/remy/listings/${id}/archive`),
+  unarchiveRemyListing: (id) => request('POST', `/remy/listings/${id}/unarchive`),
 
   // Remy — analysis & recommendations
   analyzeRemy: (queryId) => request('POST', `/remy/analyze/${queryId}`),

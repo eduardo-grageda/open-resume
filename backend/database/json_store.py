@@ -262,6 +262,7 @@ class JsonStore(StorageBackend):
         is_active: Optional[bool] = None,
         search: Optional[str] = None,
         new_only: bool = False,
+        archived: Optional[bool] = None,
         limit: int = 100,
         offset: int = 0,
     ) -> list[RemyListing]:
@@ -272,6 +273,8 @@ class JsonStore(StorageBackend):
             listings = [l for l in listings if l.query_id == query_id]
         if is_active is not None:
             listings = [l for l in listings if l.is_active == is_active]
+        if archived is not None:
+            listings = [l for l in listings if l.archived == archived]
         if search:
             q = search.lower()
             listings = [l for l in listings if q in l.title.lower() or q in l.company.lower()]
@@ -303,6 +306,20 @@ class JsonStore(StorageBackend):
         else:
             listings.append(listing)
         self._write_json_list(REMY_LISTINGS_PATH, listings)
+
+    async def delete_remy_listing(self, listing_id: str) -> bool:
+        listings = self._read_json_list(REMY_LISTINGS_PATH, RemyListing)
+        new_listings = [l for l in listings if l.id != listing_id]
+        if len(new_listings) == len(listings):
+            return False
+        self._write_json_list(REMY_LISTINGS_PATH, new_listings)
+        return True
+
+    async def delete_all_remy_listings(self) -> int:
+        listings = self._read_json_list(REMY_LISTINGS_PATH, RemyListing)
+        count = len(listings)
+        self._write_json_list(REMY_LISTINGS_PATH, [])
+        return count
 
     # --- Remy Tasks ---
 

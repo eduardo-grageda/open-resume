@@ -226,6 +226,7 @@ class RemyListing(BaseModel):
     first_seen_at: str = Field(default_factory=_now)
     last_seen_at: str = Field(default_factory=_now)
     is_active: bool = True
+    archived: bool = False
     embedding_id: str = ""
     imported_position_id: str = ""
 

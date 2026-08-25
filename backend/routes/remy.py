@@ -147,6 +147,7 @@ async def list_listings(
     active: Optional[bool] = None,
     new: bool = False,
     search: Optional[str] = None,
+    archived: Optional[bool] = None,
     limit: int = 100,
     offset: int = 0,
     storage: StorageBackend = Depends(_get_storage),
@@ -159,6 +160,7 @@ async def list_listings(
         is_active=active,
         search=search,
         new_only=new,
+        archived=archived,
         limit=limit,
         offset=offset,
     )
@@ -192,6 +194,50 @@ async def get_listing(
                 logger.warning("Detail refresh failed for listing %s: %s", listing_id, e)
 
     return {"listing": listing.model_dump(), "refreshed": refreshed}
+
+
+# ── Archive / Unarchive ───────────────────────────────────────────────────
+
+
+@router.post("/listings/{listing_id}/archive")
+async def archive_listing(listing_id: str, storage: StorageBackend = Depends(_get_storage)):
+    _require_remy_enabled()
+    listing = await storage.get_remy_listing(listing_id)
+    if listing is None:
+        raise HTTPException(status_code=404, detail="Listing not found")
+    listing.archived = True
+    await storage.save_remy_listing(listing)
+    return {"listing": listing.model_dump()}
+
+
+@router.post("/listings/{listing_id}/unarchive")
+async def unarchive_listing(listing_id: str, storage: StorageBackend = Depends(_get_storage)):
+    _require_remy_enabled()
+    listing = await storage.get_remy_listing(listing_id)
+    if listing is None:
+        raise HTTPException(status_code=404, detail="Listing not found")
+    listing.archived = False
+    await storage.save_remy_listing(listing)
+    return {"listing": listing.model_dump()}
+
+
+# ── Delete Listings ───────────────────────────────────────────────────────
+
+
+@router.delete("/listings/{listing_id}")
+async def delete_listing(listing_id: str, storage: StorageBackend = Depends(_get_storage)):
+    _require_remy_enabled()
+    deleted = await storage.delete_remy_listing(listing_id)
+    if not deleted:
+        raise HTTPException(status_code=404, detail="Listing not found")
+    return {"ok": True}
+
+
+@router.delete("/listings")
+async def delete_all_listings(storage: StorageBackend = Depends(_get_storage)):
+    _require_remy_enabled()
+    count = await storage.delete_all_remy_listings()
+    return {"ok": True, "deleted": count}
 
 
 # ── Analysis & Recommendations (Phase 4) ─────────────────────────────────────

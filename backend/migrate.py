@@ -40,7 +40,7 @@ async def _json_to_mongo() -> None:
     session_count = 0
     if SESSIONS_DIR.exists():
         for session_file in SESSIONS_DIR.glob("*.json"):
-            with open(session_file) as f:
+            with open(session_file, encoding="utf-8") as f:
                 session = OnboardingSession(**json.load(f))
             await mongo_store.save_onboarding_session(session)
             session_count += 1

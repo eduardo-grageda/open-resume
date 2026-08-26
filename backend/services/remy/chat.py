@@ -116,7 +116,10 @@ async def stream_chat(
     title = thread.get("title", "") if thread else ""
     if not title and len(message) > 4:
         title = message[:60]
-    memory.save_thread(thread_id, history, title=title)
+    try:
+        memory.save_thread(thread_id, history, title=title)
+    except Exception:
+        logger.exception("Remy failed to persist chat thread %s", thread_id)
     yield {"type": "done"}
 
 

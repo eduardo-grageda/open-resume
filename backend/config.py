@@ -81,7 +81,7 @@ def _env_override(config: AppConfig) -> AppConfig:
 def load_config() -> AppConfig:
     DATA_DIR.mkdir(parents=True, exist_ok=True)
     if CONFIG_PATH.exists():
-        with open(CONFIG_PATH) as f:
+        with open(CONFIG_PATH, encoding="utf-8") as f:
             raw = json.load(f)
         config = AppConfig(**{k: v for k, v in raw.items() if k in AppConfig.model_fields})
     else:
@@ -91,7 +91,7 @@ def load_config() -> AppConfig:
 
 def save_config(config: AppConfig) -> None:
     DATA_DIR.mkdir(parents=True, exist_ok=True)
-    with open(CONFIG_PATH, "w") as f:
+    with open(CONFIG_PATH, "w", encoding="utf-8") as f:
         json.dump(config.model_dump(), f, indent=2)
 
 

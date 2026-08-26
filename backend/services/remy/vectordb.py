@@ -107,11 +107,11 @@ class VectorStore:
     def _read(self) -> dict[str, dict]:
         if not VECTORS_PATH.exists():
             return {}
-        with open(VECTORS_PATH) as f:
+        with open(VECTORS_PATH, encoding="utf-8") as f:
             return json.load(f)
 
     def _write(self, entries: dict[str, dict]) -> None:
-        with open(VECTORS_PATH, "w") as f:
+        with open(VECTORS_PATH, "w", encoding="utf-8") as f:
             json.dump(entries, f, indent=2, ensure_ascii=False)
 
     async def get(self, vector_id: str) -> Optional[dict]:

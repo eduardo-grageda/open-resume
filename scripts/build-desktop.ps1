@@ -23,8 +23,8 @@ Set-Location $RepoRoot
 
 Write-Host ""
 Write-Host "=== 3/3 Building Tauri desktop app ==="
-Set-Location "$RepoRoot\frontend"
-npx tauri build
+Set-Location $RepoRoot
+& "$RepoRoot\frontend\node_modules\.bin\tauri.cmd" build
 Set-Location $RepoRoot
 
 Write-Host ""

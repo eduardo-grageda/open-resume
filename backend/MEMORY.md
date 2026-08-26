@@ -42,6 +42,7 @@ backend/
 - Env var overrides for all fields (REMY_ENABLED parsed as bool, REMY_REQUEST_DELAY as float)
 - `load_config()` reads `data/config.json`, falls back to defaults
 - `save_config()` writes to `data/config.json`
+- All text file I/O (config, JSON store, Remy memory/vectordb, migrate) uses explicit `encoding="utf-8"` so non-ASCII content (emoji, accents) is safe on Windows (default cp1252 otherwise throws `UnicodeEncodeError`)
 
 ### Models (`models.py`)
 - `PersonalInfo`, `CareerEntry`, `EducationEntry`, `SkillCategory`, `ToolCategory`, `Accomplishment`, `SpokenLanguage`, `Languages`, `Project`, `Certification`

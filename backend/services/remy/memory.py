@@ -52,12 +52,12 @@ class RemyMemory:
     def _read_json(path, default):
         if not path.exists():
             return default
-        with open(path) as f:
+        with open(path, encoding="utf-8") as f:
             return json.load(f)
 
     @staticmethod
     def _write_json(path, data) -> None:
-        with open(path, "w") as f:
+        with open(path, "w", encoding="utf-8") as f:
             json.dump(data, f, indent=2, ensure_ascii=False)
 
     # --- profile ---

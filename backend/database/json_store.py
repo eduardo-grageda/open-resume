@@ -56,12 +56,12 @@ class JsonStore(StorageBackend):
     async def get_cv(self) -> Optional[BaseCV]:
         if not CV_PATH.exists():
             return None
-        with open(CV_PATH) as f:
+        with open(CV_PATH, encoding="utf-8") as f:
             return BaseCV(**json.load(f))
 
     async def save_cv(self, cv: BaseCV) -> None:
         cv.updated_at = _now()
-        with open(CV_PATH, "w") as f:
+        with open(CV_PATH, "w", encoding="utf-8") as f:
             json.dump(cv.model_dump(), f, indent=2, ensure_ascii=False)
 
     # --- Settings ---
@@ -84,7 +84,7 @@ class JsonStore(StorageBackend):
             meta_path = slug_dir / "metadata.json"
             if not meta_path.exists():
                 continue
-            with open(meta_path) as f:
+            with open(meta_path, encoding="utf-8") as f:
                 pos = Position(**json.load(f))
             if company and company.lower() not in pos.company_name.lower():
                 continue
@@ -100,7 +100,7 @@ class JsonStore(StorageBackend):
             meta_path = slug_dir / "metadata.json"
             if not meta_path.exists():
                 continue
-            with open(meta_path) as f:
+            with open(meta_path, encoding="utf-8") as f:
                 pos = Position(**json.load(f))
             if pos.id == position_id:
                 return pos
@@ -111,15 +111,15 @@ class JsonStore(StorageBackend):
         slug_dir = POSITIONS_DIR / (position.company_slug or "unknown")
         slug_dir.mkdir(parents=True, exist_ok=True)
         meta_path = slug_dir / "metadata.json"
-        with open(meta_path, "w") as f:
+        with open(meta_path, "w", encoding="utf-8") as f:
             json.dump(position.model_dump(), f, indent=2, ensure_ascii=False)
         jd_path = slug_dir / "job_description.md"
         if position.job_description_md:
-            with open(jd_path, "w") as f:
+            with open(jd_path, "w", encoding="utf-8") as f:
                 f.write(position.job_description_md)
         cv_path = slug_dir / "tailored_cv.md"
         if position.tailored_cv_md:
-            with open(cv_path, "w") as f:
+            with open(cv_path, "w", encoding="utf-8") as f:
                 f.write(position.tailored_cv_md)
 
     async def delete_position(self, position_id: str) -> bool:
@@ -129,7 +129,7 @@ class JsonStore(StorageBackend):
             meta_path = slug_dir / "metadata.json"
             if not meta_path.exists():
                 continue
-            with open(meta_path) as f:
+            with open(meta_path, encoding="utf-8") as f:
                 pos = Position(**json.load(f))
             if pos.id == position_id:
                 shutil.rmtree(slug_dir)
@@ -142,13 +142,13 @@ class JsonStore(StorageBackend):
         session_path = SESSIONS_DIR / f"{session_id}.json"
         if not session_path.exists():
             return None
-        with open(session_path) as f:
+        with open(session_path, encoding="utf-8") as f:
             return OnboardingSession(**json.load(f))
 
     async def save_onboarding_session(self, session: OnboardingSession) -> None:
         SESSIONS_DIR.mkdir(parents=True, exist_ok=True)
         session_path = SESSIONS_DIR / f"{session.id}.json"
-        with open(session_path, "w") as f:
+        with open(session_path, "w", encoding="utf-8") as f:
             json.dump(session.model_dump(), f, indent=2, ensure_ascii=False)
 
     async def delete_onboarding_session(self, session_id: str) -> None:
@@ -162,13 +162,13 @@ class JsonStore(StorageBackend):
         session_path = STAR_SESSIONS_DIR / f"{session_id}.json"
         if not session_path.exists():
             return None
-        with open(session_path) as f:
+        with open(session_path, encoding="utf-8") as f:
             return StarSession(**json.load(f))
 
     async def save_star_session(self, session: StarSession) -> None:
         STAR_SESSIONS_DIR.mkdir(parents=True, exist_ok=True)
         session_path = STAR_SESSIONS_DIR / f"{session.id}.json"
-        with open(session_path, "w") as f:
+        with open(session_path, "w", encoding="utf-8") as f:
             json.dump(session.model_dump(), f, indent=2, ensure_ascii=False)
 
     async def delete_star_session(self, session_id: str) -> None:
@@ -183,7 +183,7 @@ class JsonStore(StorageBackend):
         for story_file in sorted(STAR_STORIES_DIR.iterdir()):
             if not story_file.suffix == ".json":
                 continue
-            with open(story_file) as f:
+            with open(story_file, encoding="utf-8") as f:
                 results.append(StarStory(**json.load(f)))
         return results
 
@@ -191,14 +191,14 @@ class JsonStore(StorageBackend):
         story_path = STAR_STORIES_DIR / f"{story_id}.json"
         if not story_path.exists():
             return None
-        with open(story_path) as f:
+        with open(story_path, encoding="utf-8") as f:
             return StarStory(**json.load(f))
 
     async def save_star_story(self, story: StarStory) -> None:
         story.updated_at = _now()
         STAR_STORIES_DIR.mkdir(parents=True, exist_ok=True)
         story_path = STAR_STORIES_DIR / f"{story.id}.json"
-        with open(story_path, "w") as f:
+        with open(story_path, "w", encoding="utf-8") as f:
             json.dump(story.model_dump(), f, indent=2, ensure_ascii=False)
 
     async def delete_star_story(self, story_id: str) -> bool:
@@ -214,13 +214,13 @@ class JsonStore(StorageBackend):
     def _read_json_list(path: Path, model_cls):
         if not path.exists():
             return []
-        with open(path) as f:
+        with open(path, encoding="utf-8") as f:
             raw = json.load(f)
         return [model_cls(**item) for item in raw]
 
     @staticmethod
     def _write_json_list(path: Path, items: list) -> None:
-        with open(path, "w") as f:
+        with open(path, "w", encoding="utf-8") as f:
             json.dump([item.model_dump() for item in items], f, indent=2, ensure_ascii=False)
 
     # --- Remy Queries ---

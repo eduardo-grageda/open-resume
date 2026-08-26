@@ -1,4 +1,4 @@
-#Requires -Version 5.1
+﻿#Requires -Version 5.1
 $ErrorActionPreference = "Stop"
 
 $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
@@ -13,8 +13,8 @@ function Command-Exists($cmd) {
     return (Get-Command $cmd -ErrorAction SilentlyContinue) -ne $null
 }
 
-function Test-Version($cmd, $args, $requiredMajor, $label) {
-    $output = & $cmd $args 2>&1 | Out-String
+function Test-Version($cmd, $versionArgs, $requiredMajor, $label) {
+    $output = & $cmd @versionArgs 2>&1 | Out-String
     $match = [regex]::Match($output, '(\d+)\.(\d+)(?:\.(\d+))?')
     if (-not $match.Success) {
         Write-Host "  WARNING: Could not detect $label version." -ForegroundColor Yellow
